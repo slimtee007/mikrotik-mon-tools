@@ -1,0 +1,1004 @@
+#!/usr/bin/env python3
+"""
+MikroTik Hotspot/Billing Dashboard
+==================================
+A responsive, immersive dashboard for monitoring MikroTik routers
+with UserManager, hotspot, and billing metrics.
+
+Requirements:
+    pip install streamlit plotly pandas routeros_api psutil
+
+Usage:
+    streamlit run mikrotik_dashboard.py
+"""
+
+import streamlit as st
+import plotly.graph_objects as go
+import plotly.express as px
+from plotly.subplots import make_subplots
+import pandas as pd
+import time
+import threading
+from datetime import datetime, timedelta
+from collections import deque
+import json
+import os
+
+# MikroTik API
+try:
+    from routeros_api import RouterOsApiPool
+    from routeros_api.exceptions import RouterOsApiConnectionError
+except ImportError:
+    RouterOsApiPool = None
+
+# ==================== CONFIGURATION ====================
+DEFAULT_CONFIG = {
+    "host": "192.168.88.1",
+    "username": "admin",
+    "password": "",
+    "port": 8728,
+    "use_ssl": False,
+    "refresh_interval": 5,
+    "history_length": 60
+}
+
+CONFIG_FILE = "mikrotik_config.json"
+
+# ==================== THEME & STYLING ====================
+def apply_dark_theme():
+    st.markdown("""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+    :root {
+        --bg-primary: #0a0e1a;
+        --bg-secondary: #111827;
+        --bg-card: #1a1f2e;
+        --bg-card-hover: #232838;
+        --accent-cyan: #00d4ff;
+        --accent-green: #00e676;
+        --accent-orange: #ff9100;
+        --accent-red: #ff5252;
+        --accent-purple: #b967ff;
+        --text-primary: #e2e8f0;
+        --text-secondary: #94a3b8;
+        --border-color: #2d3748;
+    }
+
+    .stApp {
+        background: linear-gradient(135deg, #0a0e1a 0%, #111827 50%, #0f172a 100%);
+        font-family: 'Inter', sans-serif;
+    }
+
+    /* Glassmorphism cards */
+    .metric-card {
+        background: rgba(26, 31, 46, 0.7);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
+        padding: 20px;
+        margin: 10px 0;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+    }
+
+    .metric-card:hover {
+        transform: translateY(-2px);
+        border-color: rgba(0, 212, 255, 0.3);
+        box-shadow: 0 8px 32px rgba(0, 212, 255, 0.1);
+    }
+
+    .metric-title {
+        color: var(--text-secondary);
+        font-size: 0.85rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 8px;
+    }
+
+    .metric-value {
+        color: var(--text-primary);
+        font-size: 2rem;
+        font-weight: 700;
+        font-family: 'Inter', sans-serif;
+    }
+
+    .metric-sub {
+        color: var(--text-secondary);
+        font-size: 0.8rem;
+        margin-top: 4px;
+    }
+
+    /* Status indicators */
+    .status-online {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        background: var(--accent-green);
+        border-radius: 50%;
+        box-shadow: 0 0 8px var(--accent-green);
+        animation: pulse 2s infinite;
+    }
+
+    .status-offline {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        background: var(--accent-red);
+        border-radius: 50%;
+        box-shadow: 0 0 8px var(--accent-red);
+    }
+
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+
+    /* Section headers */
+    .section-header {
+        color: var(--text-primary);
+        font-size: 1.3rem;
+        font-weight: 600;
+        margin: 24px 0 16px 0;
+        padding-left: 12px;
+        border-left: 3px solid var(--accent-cyan);
+    }
+
+    /* Tables */
+    .stDataFrame {
+        background: var(--bg-card) !important;
+        border-radius: 12px;
+        border: 1px solid var(--border-color);
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: var(--bg-primary);
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: #374151;
+        border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: #4b5563;
+    }
+
+    /* Sidebar */
+    .css-1d391kg, .css-163ttbj {
+        background: var(--bg-secondary) !important;
+    }
+
+    /* Buttons */
+    .stButton>button {
+        background: linear-gradient(135deg, #00d4ff, #0099cc);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 10px 24px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+
+    .stButton>button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 16px rgba(0, 212, 255, 0.4);
+    }
+
+    /* Tabs */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background: var(--bg-card);
+        padding: 8px;
+        border-radius: 12px;
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        background: transparent;
+        border-radius: 8px;
+        color: var(--text-secondary);
+        font-weight: 500;
+    }
+
+    .stTabs [aria-selected="true"] {
+        background: rgba(0, 212, 255, 0.15) !important;
+        color: var(--accent-cyan) !important;
+    }
+
+    /* Log entries */
+    .log-entry {
+        font-family: 'Courier New', monospace;
+        font-size: 0.85rem;
+        padding: 6px 12px;
+        border-radius: 6px;
+        margin: 2px 0;
+    }
+
+    .log-info { background: rgba(0, 212, 255, 0.1); color: #00d4ff; }
+    .log-warning { background: rgba(255, 145, 0, 0.1); color: #ff9100; }
+    .log-error { background: rgba(255, 82, 82, 0.1); color: #ff5252; }
+    .log-success { background: rgba(0, 230, 118, 0.1); color: #00e676; }
+
+    /* Animations */
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .animate-in {
+        animation: fadeIn 0.5s ease forwards;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+
+# ==================== DATA STORE ====================
+class MetricsStore:
+    def __init__(self, max_len=60):
+        self.max_len = max_len
+        self.timestamps = deque(maxlen=max_len)
+        self.cpu_history = deque(maxlen=max_len)
+        self.ram_history = deque(maxlen=max_len)
+        self.tx_history = deque(maxlen=max_len)
+        self.rx_history = deque(maxlen=max_len)
+        self.power_history = deque(maxlen=max_len)
+        self.active_users_history = deque(maxlen=max_len)
+        self.logs = deque(maxlen=100)
+        self.last_update = None
+        self.connected = False
+
+    def add_metric(self, timestamp, cpu, ram, tx, rx, power, active_users):
+        self.timestamps.append(timestamp)
+        self.cpu_history.append(cpu)
+        self.ram_history.append(ram)
+        self.tx_history.append(tx)
+        self.rx_history.append(rx)
+        self.power_history.append(power)
+        self.active_users_history.append(active_users)
+        self.last_update = timestamp
+
+    def add_log(self, level, message):
+        self.logs.append({
+            "timestamp": datetime.now().strftime("%H:%M:%S"),
+            "level": level,
+            "message": message
+        })
+
+
+# ==================== MIKROTIK API ====================
+class MikroTikAPI:
+    def __init__(self, host, username, password, port=8728, use_ssl=False):
+        self.host = host
+        self.username = username
+        self.password = password
+        self.port = port
+        self.use_ssl = use_ssl
+        self.api = None
+        self.connection = None
+
+    def connect(self):
+        if RouterOsApiPool is None:
+            return False
+        try:
+            self.connection = RouterOsApiPool(
+                self.host,
+                username=self.username,
+                password=self.password,
+                port=self.port,
+                use_ssl=self.use_ssl,
+                plaintext_login=True
+            )
+            self.api = self.connection.get_api()
+            return True
+        except Exception as e:
+            st.error(f"Connection failed: {e}")
+            return False
+
+    def disconnect(self):
+        if self.connection:
+            try:
+                self.connection.disconnect()
+            except:
+                pass
+
+    def get_system_resources(self):
+        """Get CPU, RAM, and uptime info"""
+        try:
+            res = self.api.get_resource('/system/resource')
+            data = res.get()[0]
+            return {
+                'cpu_load': int(data.get('cpu-load', 0)),
+                'free_memory': int(data.get('free-memory', 0)),
+                'total_memory': int(data.get('total-memory', 0)),
+                'uptime': data.get('uptime', 'N/A'),
+                'version': data.get('version', 'N/A'),
+                'board_name': data.get('board-name', 'N/A'),
+                'architecture': data.get('architecture-name', 'N/A')
+            }
+        except Exception as e:
+            return None
+
+    def get_power_usage(self):
+        """Get power consumption if supported"""
+        result = {'voltage': 0.0, 'current': 0.0, 'power': 0.0, 'temperature': None}
+        try:
+            # Try health resource first (newer RouterOS)
+            health = self.api.get_resource('/system/health')
+            health_data = health.get()
+            for item in health_data:
+                if 'voltage' in item:
+                    voltage = float(item.get('voltage', 0)) / 10
+                    current = float(item.get('current', 0)) / 1000 if 'current' in item else 0.0
+                    power = voltage * current if current > 0 else voltage * 0.5
+                    result['voltage'] = voltage
+                    result['current'] = current
+                    result['power'] = round(power, 2)
+                    if 'temperature' in item:
+                        result['temperature'] = float(item.get('temperature', 0)) / 10
+                    return result
+            # Fallback to routerboard
+            rb = self.api.get_resource('/system/routerboard')
+            rb_data = rb.get()[0]
+            if 'current-voltage' in rb_data:
+                result['voltage'] = float(rb_data.get('current-voltage', 0)) / 10
+            if 'temperature' in rb_data:
+                result['temperature'] = float(rb_data.get('temperature', 0)) / 10
+            return result
+        except Exception:
+            return result
+
+    def get_interface_stats(self):
+        """Get network interface statistics"""
+        try:
+            interfaces = self.api.get_resource('/interface')
+            stats = interfaces.get()
+
+            total_rx = 0
+            total_tx = 0
+            interface_data = []
+
+            for iface in stats:
+                if iface.get('type') == 'ether' or 'wlan' in iface.get('type', ''):
+                    rx = int(iface.get('rx-byte', 0))
+                    tx = int(iface.get('tx-byte', 0))
+                    total_rx += rx
+                    total_tx += tx
+
+                    interface_data.append({
+                        'name': iface.get('name'),
+                        'type': iface.get('type'),
+                        'rx': self._format_bytes(rx),
+                        'tx': self._format_bytes(tx),
+                        'rx_raw': rx,
+                        'tx_raw': tx,
+                        'status': 'up' if iface.get('running') == 'true' else 'down'
+                    })
+
+            return {
+                'total_rx': total_rx,
+                'total_tx': total_tx,
+                'interfaces': interface_data
+            }
+        except Exception as e:
+            return None
+
+    def get_active_hotspot_users(self):
+        """Get currently active hotspot users"""
+        try:
+            users = self.api.get_resource('/ip/hotspot/active')
+            active = users.get()
+            return [{
+                'user': u.get('user', 'N/A'),
+                'address': u.get('address', 'N/A'),
+                'mac': u.get('mac-address', 'N/A'),
+                'uptime': u.get('uptime', 'N/A'),
+                'bytes_in': self._format_bytes(int(u.get('bytes-in', 0))),
+                'bytes_out': self._format_bytes(int(u.get('bytes-out', 0)))
+            } for u in active]
+        except Exception:
+            return []
+
+    def get_usermanager_users(self):
+        """Get UserManager users and vouchers"""
+        try:
+            users = self.api.get_resource('/tool/user-manager/user')
+            all_users = users.get()
+            return [{
+                'username': u.get('username', 'N/A'),
+                'shared_users': u.get('shared-users', '1'),
+                'uptime_used': u.get('uptime-used', '0s'),
+                'bytes_used': self._format_bytes(int(u.get('bytes-used', 0))),
+                'disabled': u.get('disabled', 'false') == 'true'
+            } for u in all_users]
+        except Exception:
+            return []
+
+    def get_usermanager_sessions(self):
+        """Get active UserManager sessions"""
+        try:
+            sessions = self.api.get_resource('/tool/user-manager/session')
+            active_sessions = sessions.get()
+            return [{
+                'user': s.get('user', 'N/A'),
+                'calling_station': s.get('calling-station-id', 'N/A'),
+                'uptime': s.get('uptime', 'N/A'),
+                'bytes_in': self._format_bytes(int(s.get('bytes-in', 0))),
+                'bytes_out': self._format_bytes(int(s.get('bytes-out', 0)))
+            } for s in active_sessions]
+        except Exception:
+            return []
+
+    def get_logs(self, topics=""):
+        """Get system logs"""
+        try:
+            logs = self.api.get_resource('/log')
+            if topics:
+                log_data = logs.get(topics=topics)
+            else:
+                log_data = logs.get()
+            return [{
+                'time': l.get('time', ''),
+                'topics': l.get('topics', ''),
+                'message': l.get('message', '')
+            } for l in log_data[-50:]]  # Last 50 logs
+        except Exception:
+            return []
+
+    @staticmethod
+    def _format_bytes(bytes_val):
+        for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+            if bytes_val < 1024:
+                return f"{bytes_val:.1f} {unit}"
+            bytes_val /= 1024
+        return f"{bytes_val:.1f} PB"
+
+
+# ==================== DEMO DATA (when no connection) ====================
+class DemoData:
+    """Generate realistic demo data when MikroTik is not connected"""
+
+    @staticmethod
+    def get_system_resources():
+        import random
+        return {
+            'cpu_load': random.randint(15, 65),
+            'free_memory': random.randint(200000000, 400000000),
+            'total_memory': 536870912,
+            'uptime': '3d12h45m',
+            'version': '7.12.1',
+            'board_name': 'hAP ac³',
+            'architecture': 'arm64'
+        }
+
+    @staticmethod
+    def get_power_usage():
+        import random
+        return {
+            'voltage': 24.0 + random.uniform(-0.5, 0.5),
+            'current': 0.5 + random.uniform(-0.05, 0.05),
+            'power': 12.0 + random.uniform(-1, 1),
+            'temperature': 45 + random.uniform(-3, 3)
+        }
+
+    @staticmethod
+    def get_interface_stats():
+        import random
+        return {
+            'total_rx': 150000000000 + random.randint(0, 1000000000),
+            'total_tx': 80000000000 + random.randint(0, 500000000),
+            'interfaces': [
+                {'name': 'ether1', 'type': 'ether', 'rx': '145.2 GB', 'tx': '78.5 GB', 'rx_raw': 145200000000, 'tx_raw': 78500000000, 'status': 'up'},
+                {'name': 'ether2', 'type': 'ether', 'rx': '2.1 GB', 'tx': '5.3 GB', 'rx_raw': 2100000000, 'tx_raw': 5300000000, 'status': 'up'},
+                {'name': 'wlan1', 'type': 'wlan', 'rx': '12.5 GB', 'tx': '8.2 GB', 'rx_raw': 12500000000, 'tx_raw': 8200000000, 'status': 'up'},
+                {'name': 'wlan2', 'type': 'wlan', 'rx': '0 B', 'tx': '0 B', 'rx_raw': 0, 'tx_raw': 0, 'status': 'down'},
+            ]
+        }
+
+    @staticmethod
+    def get_active_hotspot_users():
+        return [
+            {'user': 'guest001', 'address': '192.168.88.245', 'mac': 'AA:BB:CC:11:22:33', 'uptime': '2h15m', 'bytes_in': '1.2 GB', 'bytes_out': '450 MB'},
+            {'user': 'guest002', 'address': '192.168.88.246', 'mac': 'DD:EE:FF:44:55:66', 'uptime': '45m', 'bytes_in': '350 MB', 'bytes_out': '120 MB'},
+            {'user': 'voucher_abc123', 'address': '192.168.88.247', 'mac': '11:22:33:77:88:99', 'uptime': '15m', 'bytes_in': '85 MB', 'bytes_out': '30 MB'},
+        ]
+
+    @staticmethod
+    def get_usermanager_users():
+        return [
+            {'username': 'admin', 'shared_users': '1', 'uptime_used': '12h30m', 'bytes_used': '5.2 GB', 'disabled': False},
+            {'username': 'voucher_1day', 'shared_users': '3', 'uptime_used': '4h15m', 'bytes_used': '1.8 GB', 'disabled': False},
+            {'username': 'voucher_1week', 'shared_users': '5', 'uptime_used': '2d6h', 'bytes_used': '12.5 GB', 'disabled': False},
+            {'username': 'guest_temp', 'shared_users': '1', 'uptime_used': '30m', 'bytes_used': '150 MB', 'disabled': True},
+        ]
+
+    @staticmethod
+    def get_usermanager_sessions():
+        return [
+            {'user': 'guest001', 'calling_station': 'AA:BB:CC:11:22:33', 'uptime': '2h15m', 'bytes_in': '1.2 GB', 'bytes_out': '450 MB'},
+            {'user': 'guest002', 'calling_station': 'DD:EE:FF:44:55:66', 'uptime': '45m', 'bytes_in': '350 MB', 'bytes_out': '120 MB'},
+        ]
+
+    @staticmethod
+    def get_logs():
+        return [
+            {'time': '15:42:15', 'topics': 'system,info', 'message': 'user admin logged in from 192.168.88.10 via winbox'},
+            {'time': '15:40:22', 'topics': 'hotspot,info', 'message': 'guest001 (192.168.88.245): logged in'},
+            {'time': '15:38:10', 'topics': 'dhcp,info', 'message': 'assigned 192.168.88.247 to 11:22:33:77:88:99'},
+            {'time': '15:35:45', 'topics': 'system,warning', 'message': 'cpu usage exceeded 80%'},
+            {'time': '15:30:00', 'topics': 'firewall,info', 'message': 'drop input from WAN'},
+        ]
+
+
+# ==================== CHART COMPONENTS ====================
+def create_gauge_chart(value, title, color, suffix="%"):
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=value,
+        title={'text': title, 'font': {'size': 14, 'color': '#94a3b8'}},
+        number={'suffix': suffix, 'font': {'size': 24, 'color': '#e2e8f0'}},
+        gauge={
+            'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': '#2d3748'},
+            'bar': {'color': color},
+            'bgcolor': 'rgba(0,0,0,0)',
+            'borderwidth': 2,
+            'bordercolor': '#2d3748',
+            'steps': [
+                {'range': [0, 50], 'color': 'rgba(0, 230, 118, 0.1)'},
+                {'range': [50, 80], 'color': 'rgba(255, 145, 0, 0.1)'},
+                {'range': [80, 100], 'color': 'rgba(255, 82, 82, 0.1)'}
+            ],
+            'threshold': {
+                'line': {'color': color, 'width': 4},
+                'thickness': 0.75,
+                'value': value
+            }
+        }
+    ))
+    fig.update_layout(
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        height=200,
+        margin=dict(l=20, r=20, t=40, b=20),
+        font={'family': 'Inter'}
+    )
+    return fig
+
+
+def create_time_series(timestamps, data_dict, title, colors):
+    fig = go.Figure()
+    for label, data in data_dict.items():
+        fig.add_trace(go.Scatter(
+            x=list(timestamps),
+            y=list(data),
+            mode='lines',
+            name=label,
+            line=dict(color=colors.get(label, '#00d4ff'), width=2),
+            fill='tozeroy',
+            fillcolor=f"rgba{tuple(list(int(colors.get(label, '#00d4ff')[i:i+2], 16) for i in (1, 3, 5)) + [0.1])}"
+        ))
+    fig.update_layout(
+        title={'text': title, 'font': {'color': '#e2e8f0', 'size': 16}},
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(26, 31, 46, 0.5)',
+        font={'color': '#94a3b8', 'family': 'Inter'},
+        xaxis=dict(gridcolor='rgba(255,255,255,0.05)', showgrid=True),
+        yaxis=dict(gridcolor='rgba(255,255,255,0.05)', showgrid=True),
+        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
+        margin=dict(l=40, r=20, t=60, b=40),
+        height=300
+    )
+    return fig
+
+
+def create_network_usage_chart(interfaces):
+    names = [i['name'] for i in interfaces]
+    rx_vals = [i['rx_raw'] / (1024**3) for i in interfaces]  # GB
+    tx_vals = [i['tx_raw'] / (1024**3) for i in interfaces]
+
+    fig = go.Figure(data=[
+        go.Bar(name='RX (Download)', x=names, y=rx_vals, marker_color='#00d4ff'),
+        go.Bar(name='TX (Upload)', x=names, y=tx_vals, marker_color='#b967ff')
+    ])
+    fig.update_layout(
+        barmode='group',
+        title={'text': 'Interface Traffic (GB)', 'font': {'color': '#e2e8f0', 'size': 16}},
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(26, 31, 46, 0.5)',
+        font={'color': '#94a3b8', 'family': 'Inter'},
+        xaxis=dict(gridcolor='rgba(255,255,255,0.05)'),
+        yaxis=dict(gridcolor='rgba(255,255,255,0.05)', title='GB'),
+        legend=dict(orientation='h', yanchor='bottom', y=1.02),
+        margin=dict(l=40, r=20, t=60, b=40),
+        height=300
+    )
+    return fig
+
+
+def create_user_pie_chart(active_count, total_count):
+    fig = go.Figure(data=[go.Pie(
+        labels=['Active', 'Inactive'],
+        values=[active_count, max(0, total_count - active_count)],
+        hole=0.6,
+        marker_colors=['#00e676', '#2d3748'],
+        textinfo='none'
+    )])
+    fig.update_layout(
+        annotations=[dict(text=f'{active_count}', x=0.5, y=0.5, font_size=28, showarrow=False, font_color='#e2e8f0')],
+        paper_bgcolor='rgba(0,0,0,0)',
+        showlegend=False,
+        margin=dict(l=20, r=20, t=20, b=20),
+        height=200
+    )
+    return fig
+
+
+# ==================== MAIN DASHBOARD ====================
+def render_metric_card(title, value, subtitle, color_class="", icon=""):
+    st.markdown(f"""
+    <div class="metric-card animate-in">
+        <div class="metric-title">{icon} {title}</div>
+        <div class="metric-value" style="color: {color_class};">{value}</div>
+        <div class="metric-sub">{subtitle}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+def main():
+    st.set_page_config(
+        page_title="MikroTik Dashboard",
+        page_icon="📡",
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
+
+    apply_dark_theme()
+
+    # Initialize session state
+    if 'store' not in st.session_state:
+        st.session_state.store = MetricsStore(max_len=DEFAULT_CONFIG['history_length'])
+    if 'config' not in st.session_state:
+        st.session_state.config = DEFAULT_CONFIG.copy()
+    if 'api' not in st.session_state:
+        st.session_state.api = None
+    if 'demo_mode' not in st.session_state:
+        st.session_state.demo_mode = True
+
+    store = st.session_state.store
+
+    # ==================== SIDEBAR ====================
+    with st.sidebar:
+        st.markdown("""
+        <div style="text-align: center; padding: 20px 0;">
+            <h1 style="color: #00d4ff; font-size: 1.5rem; margin: 0;">📡 MikroTik</h1>
+            <p style="color: #94a3b8; font-size: 0.8rem; margin: 5px 0 0 0;">Hotspot & Billing Monitor</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("---")
+
+        # Connection Settings
+        with st.expander("🔌 Connection", expanded=True):
+            host = st.text_input("Host", value=st.session_state.config['host'])
+            username = st.text_input("Username", value=st.session_state.config['username'])
+            password = st.text_input("Password", value=st.session_state.config['password'], type="password")
+            port = st.number_input("Port", value=st.session_state.config['port'], min_value=1, max_value=65535)
+
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("Connect", use_container_width=True):
+                    st.session_state.config.update({'host': host, 'username': username, 'password': password, 'port': port})
+                    api = MikroTikAPI(host, username, password, port)
+                    if api.connect():
+                        st.session_state.api = api
+                        st.session_state.demo_mode = False
+                        store.add_log("success", f"Connected to {host}")
+                        st.rerun()
+                    else:
+                        store.add_log("error", f"Failed to connect to {host}")
+                        st.error("Connection failed!")
+            with col2:
+                if st.button("Demo", use_container_width=True):
+                    st.session_state.demo_mode = True
+                    st.session_state.api = None
+                    store.add_log("info", "Switched to demo mode")
+                    st.rerun()
+
+        # Status indicator
+        if st.session_state.demo_mode:
+            st.markdown("""
+            <div style="display: flex; align-items: center; gap: 8px; padding: 10px; background: rgba(255, 145, 0, 0.1); border-radius: 8px;">
+                <span class="status-offline"></span>
+                <span style="color: #ff9100; font-size: 0.9rem;">Demo Mode</span>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown("""
+            <div style="display: flex; align-items: center; gap: 8px; padding: 10px; background: rgba(0, 230, 118, 0.1); border-radius: 8px;">
+                <span class="status-online"></span>
+                <span style="color: #00e676; font-size: 0.9rem;">Connected</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("---")
+
+        # Refresh settings
+        refresh = st.slider("Refresh (sec)", 1, 30, st.session_state.config['refresh_interval'])
+        st.session_state.config['refresh_interval'] = refresh
+
+        # Auto refresh
+        auto_refresh = st.toggle("Auto Refresh", value=True)
+
+        st.markdown("---")
+        st.markdown("""
+        <div style="text-align: center; color: #64748b; font-size: 0.75rem;">
+            MikroTik Dashboard v2.0<br>
+            Built with Streamlit
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ==================== HEADER ====================
+    st.markdown("""
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <div>
+            <h1 style="color: #e2e8f0; margin: 0; font-size: 1.8rem;">Network Operations Center</h1>
+            <p style="color: #94a3b8; margin: 5px 0 0 0; font-size: 0.9rem;">Real-time MikroTik monitoring & billing analytics</p>
+        </div>
+        <div style="text-align: right;">
+            <p style="color: #64748b; margin: 0; font-size: 0.8rem;">Last Update</p>
+            <p style="color: #00d4ff; margin: 0; font-size: 1rem; font-weight: 600;">{}</p>
+        </div>
+    </div>
+    """.format(store.last_update.strftime("%H:%M:%S") if store.last_update else "--:--:--"), unsafe_allow_html=True)
+
+    # ==================== FETCH DATA ====================
+    api = st.session_state.api
+    demo = st.session_state.demo_mode
+
+    if demo or api is None:
+        resources = DemoData.get_system_resources()
+        power = DemoData.get_power_usage()
+        interfaces = DemoData.get_interface_stats()
+        hotspot_users = DemoData.get_active_hotspot_users()
+        um_users = DemoData.get_usermanager_users()
+        um_sessions = DemoData.get_usermanager_sessions()
+        logs = DemoData.get_logs()
+    else:
+        resources = api.get_system_resources()
+        power = api.get_power_usage()
+        interfaces = api.get_interface_stats()
+        hotspot_users = api.get_active_hotspot_users()
+        um_users = api.get_usermanager_users()
+        um_sessions = api.get_usermanager_sessions()
+        logs = api.get_logs()
+
+    if resources:
+        ram_used = ((resources['total_memory'] - resources['free_memory']) / resources['total_memory']) * 100
+        store.add_metric(
+            datetime.now(),
+            resources['cpu_load'],
+            ram_used,
+            interfaces['total_tx'] if interfaces else 0,
+            interfaces['total_rx'] if interfaces else 0,
+            power['power'] if power else 0,
+            len(hotspot_users) if hotspot_users else 0
+        )
+
+    # ==================== TOP METRICS ROW ====================
+    col1, col2, col3, col4, col5 = st.columns(5)
+
+    with col1:
+        render_metric_card(
+            "CPU Load",
+            f"{resources['cpu_load']}%" if resources else "N/A",
+            f"Architecture: {resources.get('architecture', 'N/A')}" if resources else "",
+            "#00d4ff",
+            "🖥️"
+        )
+
+    with col2:
+        ram_pct = round(ram_used, 1) if resources else 0
+        render_metric_card(
+            "RAM Usage",
+            f"{ram_pct}%" if resources else "N/A",
+            f"Free: {MikroTikAPI._format_bytes(resources['free_memory']) if resources else 'N/A'}",
+            "#b967ff",
+            "💾"
+        )
+
+    with col3:
+        power_val = power.get('power', 0) if power else 0
+        voltage_val = power.get('voltage', 0) if power else 0
+        current_val = power.get('current', 0) if power else 0
+        render_metric_card(
+            "Power Draw",
+            f"{power_val:.1f}W" if power else "N/A",
+            f"{voltage_val:.1f}V @ {current_val:.2f}A" if power else "",
+            "#00e676",
+            "⚡"
+        )
+
+    with col4:
+        temp = power.get('temperature') if power else None
+        temp_display = f"{temp:.1f}°C" if isinstance(temp, (int, float)) else "N/A"
+        temp_color = "#ff9100" if isinstance(temp, (int, float)) and temp > 60 else "#00e676"
+        render_metric_card(
+            "Temperature",
+            temp_display,
+            "System thermal status",
+            temp_color,
+            "🌡️"
+        )
+
+    with col5:
+        uptime = resources.get('uptime', 'N/A') if resources else 'N/A'
+        render_metric_card(
+            "Uptime",
+            uptime,
+            f"RouterOS {resources.get('version', 'N/A')}" if resources else "",
+            "#e2e8f0",
+            "⏱️"
+        )
+
+    # ==================== CHARTS ROW 1 ====================
+    st.markdown('<div class="section-header">System Performance</div>', unsafe_allow_html=True)
+
+    col1, col2, col3 = st.columns([1, 1, 1])
+
+    with col1:
+        if resources:
+            fig = create_gauge_chart(resources['cpu_load'], "CPU", "#00d4ff")
+            st.plotly_chart(fig, use_container_width=True, key="cpu_gauge")
+
+    with col2:
+        if resources:
+            fig = create_gauge_chart(ram_pct, "RAM", "#b967ff")
+            st.plotly_chart(fig, use_container_width=True, key="ram_gauge")
+
+    with col3:
+        if power and isinstance(power.get('temperature'), (int, float)):
+            temp_val = min(power['temperature'], 100)
+            fig = create_gauge_chart(temp_val, "Temp", "#ff9100", "°C")
+            st.plotly_chart(fig, use_container_width=True, key="temp_gauge")
+        else:
+            fig = create_gauge_chart(0, "Temp", "#64748b", "°C")
+            st.plotly_chart(fig, use_container_width=True, key="temp_gauge_na")
+
+    # ==================== CHARTS ROW 2 ====================
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if len(store.timestamps) > 1:
+            fig = create_time_series(
+                store.timestamps,
+                {"CPU": store.cpu_history, "RAM": store.ram_history},
+                "CPU & RAM History",
+                {"CPU": "#00d4ff", "RAM": "#b967ff"}
+            )
+            st.plotly_chart(fig, use_container_width=True, key="sys_history")
+
+    with col2:
+        if len(store.timestamps) > 1:
+            fig = create_time_series(
+                store.timestamps,
+                {"Active Users": store.active_users_history},
+                "Active Hotspot Users",
+                {"Active Users": "#00e676"}
+            )
+            st.plotly_chart(fig, use_container_width=True, key="users_history")
+
+    # ==================== NETWORK SECTION ====================
+    st.markdown('<div class="section-header">Network Utilization</div>', unsafe_allow_html=True)
+
+    col1, col2 = st.columns([2, 1])
+
+    with col1:
+        if interfaces:
+            fig = create_network_usage_chart(interfaces['interfaces'])
+            st.plotly_chart(fig, use_container_width=True, key="net_chart")
+
+    with col2:
+        if interfaces:
+            st.markdown("""
+            <div class="metric-card">
+                <div class="metric-title">📊 Interface Status</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            iface_df = pd.DataFrame([
+                {
+                    'Interface': i['name'],
+                    'Status': '🟢 UP' if i['status'] == 'up' else '🔴 DOWN',
+                    'RX': i['rx'],
+                    'TX': i['tx']
+                } for i in interfaces['interfaces']
+            ])
+            st.dataframe(iface_df, use_container_width=True, hide_index=True, height=250)
+
+    # ==================== HOTSPOT / USERMANAGER ====================
+    st.markdown('<div class="section-header">Hotspot & UserManager</div>', unsafe_allow_html=True)
+
+    tab1, tab2, tab3 = st.tabs(["🔥 Active Hotspot Users", "👥 UserManager Users", "🔑 Active Sessions"])
+
+    with tab1:
+        if hotspot_users:
+            df = pd.DataFrame(hotspot_users)
+            st.dataframe(df, use_container_width=True, hide_index=True)
+            st.markdown(f"""
+            <div style="display: flex; gap: 20px; margin-top: 10px;">
+                <div class="metric-card" style="flex: 1;">
+                    <div class="metric-title">Total Active</div>
+                    <div class="metric-value" style="color: #00e676;">{len(hotspot_users)}</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.info("No active hotspot users")
+
+    with tab2:
+        if um_users:
+            df = pd.DataFrame(um_users)
+            df['Status'] = df['disabled'].apply(lambda x: '🔴 Disabled' if x else '🟢 Active')
+            st.dataframe(df[['username', 'shared_users', 'uptime_used', 'bytes_used', 'Status']], 
+                        use_container_width=True, hide_index=True)
+
+            active_um = len([u for u in um_users if not u['disabled']])
+            col1, col2 = st.columns(2)
+            with col1:
+                fig = create_user_pie_chart(active_um, len(um_users))
+                st.plotly_chart(fig, use_container_width=True, key="um_pie")
+            with col2:
+                render_metric_card("Total Vouchers", len(um_users), f"{active_um} active", "#b967ff", "🎫")
+        else:
+            st.info("No UserManager users found")
+
+    with tab3:
+        if um_sessions:
+            df = pd.DataFrame(um_sessions)
+            st.dataframe(df, use_container_width=True, hide_index=True)
+        else:
+            st.info("No active UserManager sessions")
+
+    # ==================== LOGS SECTION ====================
+    st.markdown('<div class="section-header">System Logs</div>', unsafe_allow_html=True)
+
+    log_filter = st.selectbox("Filter by topic", ["All", "system", "hotspot", "dhcp", "firewall", "warning", "error"], index=0)
+
+    if logs:
+        filtered_logs = logs
+        if log_filter != "All":
+            filtered_logs = [l for l in logs if log_filter in l.get('topics', '')]
+
+        for log in filtered_logs[-20:]:
+            level = "info"
+            if "error" in log.get('topics', ''):
+                level = "error"
+            elif "warning" in log.get('topics', ''):
+                level = "warning"
+            elif "hotspot" in log.get('topics', '') and "logged in" in log.get('message', ''):
+                level = "success"
+
+            st.markdown(f"""
+            <div class="log-entry log-{level}">
+                <strong>[{log.get('time', '--:--:--')}]</strong> 
+                <span style="opacity: 0.7;">[{log.get('topics', '')}]</span> 
+                {log.get('message', '')}
+            </div>
+            """, unsafe_allow_html=True)
+    else:
+        st.info("No logs available")
+
+    # ==================== AUTO REFRESH ====================
+    if auto_refresh:
+        time.sleep(0.5)
+        st.rerun()
+
+
+if __name__ == "__main__":
+    main()
