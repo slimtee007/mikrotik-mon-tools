@@ -146,8 +146,8 @@ def apply_dark_theme():
     .log-warning { color: var(--accent-orange); }
     .log-success { color: var(--accent-green); }
     
-    /* Hide default header */
-    header { visibility: hidden; }
+    /* Make header transparent instead of hiding so sidebar toggle works */
+    header { background: transparent !important; }
     </style>
     """, unsafe_allow_html=True)
 
