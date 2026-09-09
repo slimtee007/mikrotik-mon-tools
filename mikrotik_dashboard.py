@@ -22,7 +22,12 @@ import threading
 from datetime import datetime, timedelta
 from collections import deque
 import json
+import requests
 import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # MikroTik API
 try:
@@ -33,14 +38,20 @@ except ImportError:
 
 # ==================== CONFIGURATION ====================
 DEFAULT_CONFIG = {
-    "host": "192.168.88.1",
-    "username": "admin",
-    "password": "",
-    "port": 8728,
-    "use_ssl": False,
+    "host": os.getenv("MIKROTIK_HOST", "192.168.88.1"),
+    "username": os.getenv("MIKROTIK_USER", "admin"),
+    "password": os.getenv("MIKROTIK_PASS", ""),
+    "port": int(os.getenv("MIKROTIK_PORT", "8728")),
+    "use_ssl": os.getenv("MIKROTIK_SSL", "False").lower() == "true",
     "refresh_interval": 5,
-    "history_length": 60
+    "history_length": 60,
+    "billing_provider": os.getenv("BILLING_PROVIDER", "None"),
+    "billing_key": os.getenv("BILLING_KEY", "")
 }
+
+# Admin Login Credentials
+ADMIN_USER = os.getenv("ADMIN_USER", "admin")
+ADMIN_PASS = os.getenv("ADMIN_PASS", "password123")
 
 CONFIG_FILE = "mikrotik_config.json"
 
@@ -48,66 +59,59 @@ CONFIG_FILE = "mikrotik_config.json"
 def apply_dark_theme():
     st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
 
     :root {
-        --bg-primary: #0a0e1a;
-        --bg-secondary: #111827;
-        --bg-card: #1a1f2e;
-        --bg-card-hover: #232838;
-        --accent-cyan: #00d4ff;
-        --accent-green: #00e676;
-        --accent-orange: #ff9100;
-        --accent-red: #ff5252;
-        --accent-purple: #b967ff;
-        --text-primary: #e2e8f0;
-        --text-secondary: #94a3b8;
-        --border-color: #2d3748;
+        --bg-primary: #0e1117;
+        --bg-secondary: #161b22;
+        --bg-card: #161b22;
+        --accent-primary: #2f81f7;
+        --accent-green: #238636;
+        --accent-orange: #d29922;
+        --accent-red: #da3633;
+        --text-primary: #e6edf3;
+        --text-secondary: #848d97;
+        --border-color: #30363d;
     }
 
     .stApp {
-        background: linear-gradient(135deg, #0a0e1a 0%, #111827 50%, #0f172a 100%);
-        font-family: 'Inter', sans-serif;
+        background-color: var(--bg-primary);
+        font-family: 'Inter', -apple-system, sans-serif;
     }
 
-    /* Glassmorphism cards */
+    /* Clean cards, no glassmorphism */
     .metric-card {
-        background: rgba(26, 31, 46, 0.7);
-        backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 16px;
-        padding: 20px;
-        margin: 10px 0;
-        transition: all 0.3s ease;
-        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+        background-color: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 16px 20px;
+        margin: 8px 0;
+        transition: border-color 0.2s ease;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.12);
     }
 
     .metric-card:hover {
-        transform: translateY(-2px);
-        border-color: rgba(0, 212, 255, 0.3);
-        box-shadow: 0 8px 32px rgba(0, 212, 255, 0.1);
+        border-color: #8b949e;
     }
 
     .metric-title {
         color: var(--text-secondary);
         font-size: 0.85rem;
         font-weight: 500;
-        text-transform: uppercase;
-        letter-spacing: 1px;
         margin-bottom: 8px;
     }
 
     .metric-value {
+        font-size: 1.75rem;
+        font-weight: 600;
         color: var(--text-primary);
-        font-size: 2rem;
-        font-weight: 700;
-        font-family: 'Inter', sans-serif;
+        margin-bottom: 4px;
+        letter-spacing: -0.5px;
     }
 
-    .metric-sub {
+    .metric-subtitle {
+        font-size: 0.75rem;
         color: var(--text-secondary);
-        font-size: 0.8rem;
-        margin-top: 4px;
     }
 
     /* Status indicators */
@@ -115,126 +119,46 @@ def apply_dark_theme():
         display: inline-block;
         width: 8px;
         height: 8px;
-        background: var(--accent-green);
+        background-color: var(--accent-green);
         border-radius: 50%;
         box-shadow: 0 0 8px var(--accent-green);
-        animation: pulse 2s infinite;
     }
 
     .status-offline {
         display: inline-block;
         width: 8px;
         height: 8px;
-        background: var(--accent-red);
+        background-color: var(--accent-orange);
         border-radius: 50%;
-        box-shadow: 0 0 8px var(--accent-red);
     }
 
-    @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.5; }
-    }
-
-    /* Section headers */
     .section-header {
+        font-size: 1.25rem;
+        font-weight: 600;
         color: var(--text-primary);
-        font-size: 1.3rem;
-        font-weight: 600;
         margin: 24px 0 16px 0;
-        padding-left: 12px;
-        border-left: 3px solid var(--accent-cyan);
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--border-color);
     }
 
-    /* Tables */
-    .stDataFrame {
-        background: var(--bg-card) !important;
-        border-radius: 12px;
+    /* Modernize logs */
+    .log-container {
+        max-height: 400px;
+        overflow-y: auto;
+        font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+        font-size: 0.8rem;
+        background-color: var(--bg-card);
         border: 1px solid var(--border-color);
-    }
-
-    /* Scrollbar */
-    ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
-    }
-
-    ::-webkit-scrollbar-track {
-        background: var(--bg-primary);
-    }
-
-    ::-webkit-scrollbar-thumb {
-        background: #374151;
-        border-radius: 4px;
-    }
-
-    ::-webkit-scrollbar-thumb:hover {
-        background: #4b5563;
-    }
-
-    /* Sidebar */
-    .css-1d391kg, .css-163ttbj {
-        background: var(--bg-secondary) !important;
-    }
-
-    /* Buttons */
-    .stButton>button {
-        background: linear-gradient(135deg, #00d4ff, #0099cc);
-        color: white;
-        border: none;
-        border-radius: 8px;
-        padding: 10px 24px;
-        font-weight: 600;
-        transition: all 0.3s ease;
-    }
-
-    .stButton>button:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 16px rgba(0, 212, 255, 0.4);
-    }
-
-    /* Tabs */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-        background: var(--bg-card);
-        padding: 8px;
-        border-radius: 12px;
-    }
-
-    .stTabs [data-baseweb="tab"] {
-        background: transparent;
-        border-radius: 8px;
-        color: var(--text-secondary);
-        font-weight: 500;
-    }
-
-    .stTabs [aria-selected="true"] {
-        background: rgba(0, 212, 255, 0.15) !important;
-        color: var(--accent-cyan) !important;
-    }
-
-    /* Log entries */
-    .log-entry {
-        font-family: 'Courier New', monospace;
-        font-size: 0.85rem;
-        padding: 6px 12px;
         border-radius: 6px;
-        margin: 2px 0;
+        padding: 12px;
     }
-
-    .log-info { background: rgba(0, 212, 255, 0.1); color: #00d4ff; }
-    .log-warning { background: rgba(255, 145, 0, 0.1); color: #ff9100; }
-    .log-error { background: rgba(255, 82, 82, 0.1); color: #ff5252; }
-    .log-success { background: rgba(0, 230, 118, 0.1); color: #00e676; }
-
-    /* Animations */
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-
-    .animate-in {
-        animation: fadeIn 0.5s ease forwards;
-    }
+    .log-entry { margin-bottom: 6px; padding: 4px 8px; border-radius: 4px; }
+    .log-info { color: var(--text-primary); }
+    .log-warning { color: var(--accent-orange); }
+    .log-success { color: var(--accent-green); }
+    
+    /* Make header transparent instead of hiding so sidebar toggle works */
+    header { background: transparent !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -312,11 +236,22 @@ class MikroTikAPI:
         """Get CPU, RAM, and uptime info"""
         try:
             res = self.api.get_resource('/system/resource')
-            data = res.get()[0]
+            data = res.get()
+            if not data:
+                return None
+            data = data[0]
+            
+            # Use safe int parsing for fields that might be missing or strings
+            def safe_int(val):
+                try:
+                    return int(val)
+                except (ValueError, TypeError):
+                    return 0
+                    
             return {
-                'cpu_load': int(data.get('cpu-load', 0)),
-                'free_memory': int(data.get('free-memory', 0)),
-                'total_memory': int(data.get('total-memory', 0)),
+                'cpu_load': safe_int(data.get('cpu-load', 0)),
+                'free_memory': safe_int(data.get('free-memory', 0)),
+                'total_memory': safe_int(data.get('total-memory', 0)),
                 'uptime': data.get('uptime', 'N/A'),
                 'version': data.get('version', 'N/A'),
                 'board_name': data.get('board-name', 'N/A'),
@@ -405,26 +340,93 @@ class MikroTikAPI:
         except Exception:
             return []
 
+
+    def _get_um_data(self, path):
+        """Helper to fetch data from UM, falling back from v6 to v7 path"""
+        try:
+            res = self.api.get_resource(f'/tool/user-manager/{path}')
+            return res.get(), res
+        except Exception:
+            try:
+                res = self.api.get_resource(f'/user-manager/{path}')
+                return res.get(), res
+            except Exception as e:
+                raise e
+
+    def generate_vouchers(self, count=1, length=6, prefix="", profile=None):
+        """Generate random vouchers in UserManager"""
+        import random
+        import string
+        try:
+            # We just need the resource object to call add()
+            # We can figure out the right path by doing a get() on a harmless list like 'user'
+            try:
+                self.api.get_resource('/tool/user-manager/user').get()
+                prefix_path = '/tool/user-manager'
+            except Exception:
+                prefix_path = '/user-manager'
+                
+            user_resource = self.api.get_resource(f'{prefix_path}/user')
+            up_resource = self.api.get_resource(f'{prefix_path}/user-profile')
+
+            vouchers = []
+            for _ in range(count):
+                chars = string.ascii_lowercase + string.digits
+                username = prefix + ''.join(random.choice(chars) for _ in range(length))
+                password = ''.join(random.choice(chars) for _ in range(length))
+                
+                try:
+                    user_resource.add(customer="admin", username=username, password=password)
+                except Exception:
+                    try:
+                        # RouterOS v6 without customer
+                        user_resource.add(username=username, password=password)
+                    except Exception:
+                        # RouterOS v7 uses 'name'
+                        user_resource.add(name=username, password=password)
+                
+                if profile and profile != "None":
+                    try:
+                        up_resource.add(customer="admin", user=username, profile=profile)
+                    except Exception:
+                        try:
+                            up_resource.add(user=username, profile=profile)
+                        except Exception:
+                            pass # Profile binding failed
+                            
+                vouchers.append({'username': username, 'password': password})
+            return vouchers
+        except Exception as e:
+            return str(e)
+
     def get_usermanager_users(self):
         """Get UserManager users and vouchers"""
         try:
-            users = self.api.get_resource('/tool/user-manager/user')
-            all_users = users.get()
-            return [{
-                'username': u.get('username', 'N/A'),
-                'shared_users': u.get('shared-users', '1'),
-                'uptime_used': u.get('uptime-used', '0s'),
-                'bytes_used': self._format_bytes(int(u.get('bytes-used', 0))),
-                'disabled': u.get('disabled', 'false') == 'true'
-            } for u in all_users]
+            all_users, _ = self._get_um_data('user')
+            
+            results = []
+            for u in all_users:
+                # Handle missing or empty bytes-used safely
+                try:
+                    b_used = int(u.get('bytes-used', 0))
+                except (ValueError, TypeError):
+                    b_used = 0
+                    
+                results.append({
+                    'username': u.get('name', u.get('username', 'N/A')),
+                    'shared_users': u.get('shared-users', '1'),
+                    'uptime_used': u.get('uptime-used', '0s'),
+                    'bytes_used': self._format_bytes(b_used),
+                    'disabled': u.get('disabled', 'false') == 'true'
+                })
+            return results
         except Exception:
             return []
 
     def get_usermanager_sessions(self):
         """Get active UserManager sessions"""
         try:
-            sessions = self.api.get_resource('/tool/user-manager/session')
-            active_sessions = sessions.get()
+            active_sessions, _ = self._get_um_data('session')
             return [{
                 'user': s.get('user', 'N/A'),
                 'calling_station': s.get('calling-station-id', 'N/A'),
@@ -432,6 +434,29 @@ class MikroTikAPI:
                 'bytes_in': self._format_bytes(int(s.get('bytes-in', 0))),
                 'bytes_out': self._format_bytes(int(s.get('bytes-out', 0)))
             } for s in active_sessions]
+        except Exception:
+            return []
+
+    def get_usermanager_profiles(self):
+        """Get UserManager profiles"""
+        try:
+            all_profiles, _ = self._get_um_data('profile')
+            return [{
+                'name': p.get('name', 'N/A'),
+                'price': p.get('price', '0'),
+                'validity': p.get('validity', '0s')
+            } for p in all_profiles]
+        except Exception:
+            return []
+
+    def get_usermanager_user_profiles(self):
+        """Get UserManager user profiles"""
+        try:
+            all_u_profiles, _ = self._get_um_data('user-profile')
+            return [{
+                'user': p.get('user', 'N/A'),
+                'profile': p.get('profile', 'N/A'),
+            } for p in all_u_profiles]
         except Exception:
             return []
 
@@ -463,6 +488,13 @@ class MikroTikAPI:
 # ==================== DEMO DATA (when no connection) ====================
 class DemoData:
     """Generate realistic demo data when MikroTik is not connected"""
+
+    _demo_um_users = [
+        {'username': 'admin', 'shared_users': '1', 'uptime_used': '12h30m', 'bytes_used': '5.2 GB', 'disabled': False},
+        {'username': 'voucher_1day', 'shared_users': '3', 'uptime_used': '4h15m', 'bytes_used': '1.8 GB', 'disabled': False},
+        {'username': 'voucher_1week', 'shared_users': '5', 'uptime_used': '2d6h', 'bytes_used': '12.5 GB', 'disabled': False},
+        {'username': 'guest_temp', 'shared_users': '1', 'uptime_used': '30m', 'bytes_used': '150 MB', 'disabled': True},
+    ]
 
     @staticmethod
     def get_system_resources():
@@ -509,20 +541,49 @@ class DemoData:
             {'user': 'voucher_abc123', 'address': '192.168.88.247', 'mac': '11:22:33:77:88:99', 'uptime': '15m', 'bytes_in': '85 MB', 'bytes_out': '30 MB'},
         ]
 
-    @staticmethod
-    def get_usermanager_users():
-        return [
-            {'username': 'admin', 'shared_users': '1', 'uptime_used': '12h30m', 'bytes_used': '5.2 GB', 'disabled': False},
-            {'username': 'voucher_1day', 'shared_users': '3', 'uptime_used': '4h15m', 'bytes_used': '1.8 GB', 'disabled': False},
-            {'username': 'voucher_1week', 'shared_users': '5', 'uptime_used': '2d6h', 'bytes_used': '12.5 GB', 'disabled': False},
-            {'username': 'guest_temp', 'shared_users': '1', 'uptime_used': '30m', 'bytes_used': '150 MB', 'disabled': True},
-        ]
+
+    @classmethod
+    def generate_vouchers(cls, count=1, length=6, prefix="", profile=None):
+        import random
+        import string
+        import time
+        vouchers = []
+        for _ in range(count):
+            chars = string.ascii_lowercase + string.digits
+            username = prefix + ''.join(random.choice(chars) for _ in range(length))
+            password = ''.join(random.choice(chars) for _ in range(length))
+            vouchers.append({'username': username, 'password': password})
+            cls._demo_um_users.append({
+                'username': username, 'shared_users': '1', 'uptime_used': '0s', 'bytes_used': '0 B', 'disabled': False
+            })
+        time.sleep(0.5)
+        return vouchers
+
+    @classmethod
+    def get_usermanager_users(cls):
+        return cls._demo_um_users
 
     @staticmethod
     def get_usermanager_sessions():
         return [
             {'user': 'guest001', 'calling_station': 'AA:BB:CC:11:22:33', 'uptime': '2h15m', 'bytes_in': '1.2 GB', 'bytes_out': '450 MB'},
             {'user': 'guest002', 'calling_station': 'DD:EE:FF:44:55:66', 'uptime': '45m', 'bytes_in': '350 MB', 'bytes_out': '120 MB'},
+        ]
+
+
+    @staticmethod
+    def get_usermanager_profiles():
+        return [
+            {'name': '1-Hour', 'price': '1.00', 'validity': '1h'},
+            {'name': '1-Day', 'price': '10.00', 'validity': '1d'},
+            {'name': '1-Week', 'price': '50.00', 'validity': '1w'}
+        ]
+
+    @staticmethod
+    def get_usermanager_user_profiles():
+        return [
+            {'user': 'voucher_1day', 'profile': '1-Day'},
+            {'user': 'voucher_1week', 'profile': '1-Week'}
         ]
 
     @staticmethod
@@ -579,17 +640,17 @@ def create_time_series(timestamps, data_dict, title, colors):
             y=list(data),
             mode='lines',
             name=label,
-            line=dict(color=colors.get(label, '#00d4ff'), width=2),
+            line=dict(color=colors.get(label, '#2f81f7'), width=2),
             fill='tozeroy',
-            fillcolor=f"rgba{tuple(list(int(colors.get(label, '#00d4ff')[i:i+2], 16) for i in (1, 3, 5)) + [0.1])}"
+            fillcolor=f"rgba{tuple(list(int(colors.get(label, '#2f81f7')[i:i+2], 16) for i in (1, 3, 5)) + [0.1])}"
         ))
     fig.update_layout(
         title={'text': title, 'font': {'color': '#e2e8f0', 'size': 16}},
         paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(26, 31, 46, 0.5)',
+        plot_bgcolor='rgba(0,0,0,0)',
         font={'color': '#94a3b8', 'family': 'Inter'},
-        xaxis=dict(gridcolor='rgba(255,255,255,0.05)', showgrid=True),
-        yaxis=dict(gridcolor='rgba(255,255,255,0.05)', showgrid=True),
+        xaxis=dict(gridcolor='#30363d', showgrid=True),
+        yaxis=dict(gridcolor='#30363d', showgrid=True),
         legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
         margin=dict(l=40, r=20, t=60, b=40),
         height=300
@@ -603,17 +664,17 @@ def create_network_usage_chart(interfaces):
     tx_vals = [i['tx_raw'] / (1024**3) for i in interfaces]
 
     fig = go.Figure(data=[
-        go.Bar(name='RX (Download)', x=names, y=rx_vals, marker_color='#00d4ff'),
-        go.Bar(name='TX (Upload)', x=names, y=tx_vals, marker_color='#b967ff')
+        go.Bar(name='RX (Download)', x=names, y=rx_vals, marker_color='#2f81f7'),
+        go.Bar(name='TX (Upload)', x=names, y=tx_vals, marker_color='#8957e5')
     ])
     fig.update_layout(
         barmode='group',
         title={'text': 'Interface Traffic (GB)', 'font': {'color': '#e2e8f0', 'size': 16}},
         paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(26, 31, 46, 0.5)',
+        plot_bgcolor='rgba(0,0,0,0)',
         font={'color': '#94a3b8', 'family': 'Inter'},
-        xaxis=dict(gridcolor='rgba(255,255,255,0.05)'),
-        yaxis=dict(gridcolor='rgba(255,255,255,0.05)', title='GB'),
+        xaxis=dict(gridcolor='#30363d'),
+        yaxis=dict(gridcolor='#30363d', title='GB'),
         legend=dict(orientation='h', yanchor='bottom', y=1.02),
         margin=dict(l=40, r=20, t=60, b=40),
         height=300
@@ -626,7 +687,7 @@ def create_user_pie_chart(active_count, total_count):
         labels=['Active', 'Inactive'],
         values=[active_count, max(0, total_count - active_count)],
         hole=0.6,
-        marker_colors=['#00e676', '#2d3748'],
+        marker_colors=['#238636', '#2d3748'],
         textinfo='none'
     )])
     fig.update_layout(
@@ -650,15 +711,7 @@ def render_metric_card(title, value, subtitle, color_class="", icon=""):
     """, unsafe_allow_html=True)
 
 
-def main():
-    st.set_page_config(
-        page_title="MikroTik Dashboard",
-        page_icon="📡",
-        layout="wide",
-        initial_sidebar_state="expanded"
-    )
-
-    apply_dark_theme()
+def render_dashboard():
 
     # Initialize session state
     if 'store' not in st.session_state:
@@ -676,7 +729,7 @@ def main():
     with st.sidebar:
         st.markdown("""
         <div style="text-align: center; padding: 20px 0;">
-            <h1 style="color: #00d4ff; font-size: 1.5rem; margin: 0;">📡 MikroTik</h1>
+            <h1 style="color: #e6edf3; font-size: 1.25rem; font-weight: 600; margin: 0;">MikroTik Monitor</h1>
             <p style="color: #94a3b8; font-size: 0.8rem; margin: 5px 0 0 0;">Hotspot & Billing Monitor</p>
         </div>
         """, unsafe_allow_html=True)
@@ -684,7 +737,7 @@ def main():
         st.markdown("---")
 
         # Connection Settings
-        with st.expander("🔌 Connection", expanded=True):
+        with st.expander("Connection Settings", expanded=True):
             host = st.text_input("Host", value=st.session_state.config['host'])
             username = st.text_input("Username", value=st.session_state.config['username'])
             password = st.text_input("Password", value=st.session_state.config['password'], type="password")
@@ -710,19 +763,29 @@ def main():
                     store.add_log("info", "Switched to demo mode")
                     st.rerun()
 
+
+        with st.expander("💳 Billing Integration (NGN)"):
+            b_prov = st.session_state.config.get('billing_provider', 'None')
+            billing_provider = st.selectbox("Payment Gateway", ["None", "Paystack", "Flutterwave", "PalmPay"], index=["None", "Paystack", "Flutterwave", "PalmPay"].index(b_prov) if b_prov in ["None", "Paystack", "Flutterwave", "PalmPay"] else 0)
+            billing_key = st.text_input("Secret API Key", value=st.session_state.config.get('billing_key', ''), type="password")
+            if st.button("Save Billing", use_container_width=True):
+                st.session_state.config['billing_provider'] = billing_provider
+                st.session_state.config['billing_key'] = billing_key
+                st.rerun()
+
         # Status indicator
         if st.session_state.demo_mode:
             st.markdown("""
             <div style="display: flex; align-items: center; gap: 8px; padding: 10px; background: rgba(255, 145, 0, 0.1); border-radius: 8px;">
                 <span class="status-offline"></span>
-                <span style="color: #ff9100; font-size: 0.9rem;">Demo Mode</span>
+                <span style="color: #d29922; font-size: 0.9rem;">Demo Mode</span>
             </div>
             """, unsafe_allow_html=True)
         else:
             st.markdown("""
             <div style="display: flex; align-items: center; gap: 8px; padding: 10px; background: rgba(0, 230, 118, 0.1); border-radius: 8px;">
                 <span class="status-online"></span>
-                <span style="color: #00e676; font-size: 0.9rem;">Connected</span>
+                <span style="color: #238636; font-size: 0.9rem;">Connected</span>
             </div>
             """, unsafe_allow_html=True)
 
@@ -752,7 +815,7 @@ def main():
         </div>
         <div style="text-align: right;">
             <p style="color: #64748b; margin: 0; font-size: 0.8rem;">Last Update</p>
-            <p style="color: #00d4ff; margin: 0; font-size: 1rem; font-weight: 600;">{}</p>
+            <p style="color: #2f81f7; margin: 0; font-size: 1rem; font-weight: 600;">{}</p>
         </div>
     </div>
     """.format(store.last_update.strftime("%H:%M:%S") if store.last_update else "--:--:--"), unsafe_allow_html=True)
@@ -761,24 +824,39 @@ def main():
     api = st.session_state.api
     demo = st.session_state.demo_mode
 
+    now = time.time()
+    if 'data_cache' not in st.session_state:
+        st.session_state.data_cache = {}
+
+    def fetch_with_cache(key, fetch_func, ttl=10):
+        if key not in st.session_state.data_cache or (now - st.session_state.data_cache[key]['time']) > ttl:
+            st.session_state.data_cache[key] = {'data': fetch_func(), 'time': now}
+        return st.session_state.data_cache[key]['data']
+
     if demo or api is None:
         resources = DemoData.get_system_resources()
         power = DemoData.get_power_usage()
         interfaces = DemoData.get_interface_stats()
         hotspot_users = DemoData.get_active_hotspot_users()
-        um_users = DemoData.get_usermanager_users()
+        um_users = fetch_with_cache("demo_um_users", DemoData.get_usermanager_users, ttl=30)
         um_sessions = DemoData.get_usermanager_sessions()
-        logs = DemoData.get_logs()
+        um_profiles = fetch_with_cache("demo_um_profiles", DemoData.get_usermanager_profiles, ttl=30)
+        um_user_profiles = fetch_with_cache("demo_um_user_profiles", DemoData.get_usermanager_user_profiles, ttl=30)
+        logs = fetch_with_cache("demo_logs", DemoData.get_logs, ttl=10)
     else:
         resources = api.get_system_resources()
         power = api.get_power_usage()
         interfaces = api.get_interface_stats()
         hotspot_users = api.get_active_hotspot_users()
-        um_users = api.get_usermanager_users()
+        # Cache UserManager users for 30s as this list can be huge and slow to fetch
+        um_users = fetch_with_cache("api_um_users", api.get_usermanager_users, ttl=30)
         um_sessions = api.get_usermanager_sessions()
-        logs = api.get_logs()
+        um_profiles = fetch_with_cache("api_um_profiles", api.get_usermanager_profiles, ttl=30)
+        um_user_profiles = fetch_with_cache("api_um_user_profiles", api.get_usermanager_user_profiles, ttl=30)
+        # Cache logs for 10s to reduce router load
+        logs = fetch_with_cache("api_logs", api.get_logs, ttl=10)
 
-    if resources:
+    if resources and resources.get('total_memory', 0) > 0:
         ram_used = ((resources['total_memory'] - resources['free_memory']) / resources['total_memory']) * 100
         store.add_metric(
             datetime.now(),
@@ -789,6 +867,8 @@ def main():
             power['power'] if power else 0,
             len(hotspot_users) if hotspot_users else 0
         )
+    else:
+        ram_used = 0
 
     # ==================== TOP METRICS ROW ====================
     col1, col2, col3, col4, col5 = st.columns(5)
@@ -798,7 +878,7 @@ def main():
             "CPU Load",
             f"{resources['cpu_load']}%" if resources else "N/A",
             f"Architecture: {resources.get('architecture', 'N/A')}" if resources else "",
-            "#00d4ff",
+            "#2f81f7",
             "🖥️"
         )
 
@@ -808,7 +888,7 @@ def main():
             "RAM Usage",
             f"{ram_pct}%" if resources else "N/A",
             f"Free: {MikroTikAPI._format_bytes(resources['free_memory']) if resources else 'N/A'}",
-            "#b967ff",
+            "#8957e5",
             "💾"
         )
 
@@ -820,14 +900,14 @@ def main():
             "Power Draw",
             f"{power_val:.1f}W" if power else "N/A",
             f"{voltage_val:.1f}V @ {current_val:.2f}A" if power else "",
-            "#00e676",
+            "#238636",
             "⚡"
         )
 
     with col4:
         temp = power.get('temperature') if power else None
         temp_display = f"{temp:.1f}°C" if isinstance(temp, (int, float)) else "N/A"
-        temp_color = "#ff9100" if isinstance(temp, (int, float)) and temp > 60 else "#00e676"
+        temp_color = "#d29922" if isinstance(temp, (int, float)) and temp > 60 else "#238636"
         render_metric_card(
             "Temperature",
             temp_display,
@@ -846,30 +926,31 @@ def main():
             "⏱️"
         )
 
+
     # ==================== CHARTS ROW 1 ====================
     st.markdown('<div class="section-header">System Performance</div>', unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns([1, 1, 1])
 
     with col1:
-        if resources:
-            fig = create_gauge_chart(resources['cpu_load'], "CPU", "#00d4ff")
+        if resources is not None:
+            fig = create_gauge_chart(resources.get('cpu_load', 0), "CPU", "#2f81f7")
             st.plotly_chart(fig, use_container_width=True, key="cpu_gauge")
 
     with col2:
-        if resources:
-            fig = create_gauge_chart(ram_pct, "RAM", "#b967ff")
+        if resources is not None:
+            # We already have ram_used calculated safely above
+            fig = create_gauge_chart(ram_used, "RAM", "#8957e5")
             st.plotly_chart(fig, use_container_width=True, key="ram_gauge")
 
     with col3:
         if power and isinstance(power.get('temperature'), (int, float)):
             temp_val = min(power['temperature'], 100)
-            fig = create_gauge_chart(temp_val, "Temp", "#ff9100", "°C")
+            fig = create_gauge_chart(temp_val, "Temp", "#d29922", "°C")
             st.plotly_chart(fig, use_container_width=True, key="temp_gauge")
         else:
             fig = create_gauge_chart(0, "Temp", "#64748b", "°C")
             st.plotly_chart(fig, use_container_width=True, key="temp_gauge_na")
-
     # ==================== CHARTS ROW 2 ====================
     col1, col2 = st.columns(2)
 
@@ -879,7 +960,7 @@ def main():
                 store.timestamps,
                 {"CPU": store.cpu_history, "RAM": store.ram_history},
                 "CPU & RAM History",
-                {"CPU": "#00d4ff", "RAM": "#b967ff"}
+                {"CPU": "#2f81f7", "RAM": "#8957e5"}
             )
             st.plotly_chart(fig, use_container_width=True, key="sys_history")
 
@@ -889,7 +970,7 @@ def main():
                 store.timestamps,
                 {"Active Users": store.active_users_history},
                 "Active Hotspot Users",
-                {"Active Users": "#00e676"}
+                {"Active Users": "#238636"}
             )
             st.plotly_chart(fig, use_container_width=True, key="users_history")
 
@@ -907,7 +988,7 @@ def main():
         if interfaces:
             st.markdown("""
             <div class="metric-card">
-                <div class="metric-title">📊 Interface Status</div>
+                <div class="metric-title">Interface Status</div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -924,17 +1005,103 @@ def main():
     # ==================== HOTSPOT / USERMANAGER ====================
     st.markdown('<div class="section-header">Hotspot & UserManager</div>', unsafe_allow_html=True)
 
-    tab1, tab2, tab3 = st.tabs(["🔥 Active Hotspot Users", "👥 UserManager Users", "🔑 Active Sessions"])
+    # Revenue Calculation
+    today_revenue = 0.0
+    b_prov = st.session_state.config.get('billing_provider', 'None')
+    b_key = st.session_state.config.get('billing_key', '')
+    
+    def fetch_revenue():
+        if b_prov == "Paystack" and b_key:
+            try:
+                today = datetime.now().strftime("%Y-%m-%dT00:00:00.000Z")
+                res = requests.get(f"https://api.paystack.co/transaction?status=success&from={today}", 
+                                 headers={"Authorization": f"Bearer {b_key}"})
+                data = res.json()
+                return sum(t.get('amount', 0) for t in data.get('data', [])) / 100
+            except:
+                return 0.0
+        elif b_prov == "Flutterwave" and b_key:
+            try:
+                today = datetime.now().strftime("%Y-%m-%d")
+                res = requests.get(f"https://api.flutterwave.com/v3/transactions?status=successful&from={today}", 
+                                 headers={"Authorization": f"Bearer {b_key}"})
+                data = res.json()
+                return sum(t.get('amount', 0) for t in data.get('data', []))
+            except:
+                return 0.0
+        elif b_prov == "PalmPay" and b_key:
+            try:
+                # Generalized PalmPay API fetch for daily successful transactions
+                # (Note: Exact endpoint depends on PalmPay Merchant vs POS integration)
+                today = datetime.now().strftime("%Y-%m-%d")
+                res = requests.get(f"https://api.palmpay.com/v2/transactions?status=SUCCESS&date={today}", 
+                                 headers={"Authorization": f"Bearer {b_key}"})
+                data = res.json()
+                return sum(t.get('amount', 0) for t in data.get('data', []))
+            except:
+                return 0.0
+        return 0.0
+        
+    today_revenue = fetch_with_cache("daily_revenue", fetch_revenue, ttl=60)
+    
+    # Estimated revenue based on active UM users and profiles
+    estimated_revenue = 0.0
+    if um_users and um_profiles and um_user_profiles:
+        try:
+            prof_prices = {p['name']: float(p.get('price', 0) or 0) for p in um_profiles}
+            for u in um_users:
+                if not u.get('disabled', True):
+                    # Find profile
+                    assigned = next((up['profile'] for up in um_user_profiles if up['user'] == u['username']), None)
+                    if assigned and assigned in prof_prices:
+                        estimated_revenue += prof_prices[assigned]
+        except:
+            pass
+
+    rev_col1, rev_col2 = st.columns(2)
+    with rev_col1:
+        render_metric_card(
+            "Today's Live Revenue (API)", 
+            f"₦ {today_revenue:,.2f}", 
+            f"via {b_prov}" if b_prov != "None" else "No Gateway Connected", 
+            "#238636", 
+            "💳"
+        )
+    with rev_col2:
+        render_metric_card(
+            "Estimated Active Value", 
+            f"₦ {estimated_revenue:,.2f}", 
+            "Based on active users × profile price", 
+            "#2f81f7", 
+            "📈"
+        )
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    tab1, tab2, tab3, tab4 = st.tabs(["Active Hotspot", "User Manager", "Active Sessions", "UM Profiles"])
 
     with tab1:
         if hotspot_users:
             df = pd.DataFrame(hotspot_users)
+            df = df.rename(columns={
+                'user': 'Username',
+                'address': 'IP Address',
+                'mac': 'MAC Address',
+                'uptime': 'Uptime',
+                'bytes_in': 'Download',
+                'bytes_out': 'Upload'
+            })
+            
+            search_hotspot = st.text_input("Search Active Hotspot Users", placeholder="Type a username...")
+            if search_hotspot:
+                df = df[df['Username'].str.contains(search_hotspot, case=False, na=False)]
+                
             st.dataframe(df, use_container_width=True, hide_index=True)
             st.markdown(f"""
             <div style="display: flex; gap: 20px; margin-top: 10px;">
                 <div class="metric-card" style="flex: 1;">
                     <div class="metric-title">Total Active</div>
-                    <div class="metric-value" style="color: #00e676;">{len(hotspot_users)}</div>
+                    <div class="metric-value" style="color: #238636;">{len(hotspot_users)}</div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -942,11 +1109,66 @@ def main():
             st.info("No active hotspot users")
 
     with tab2:
+        st.markdown("### Voucher Generator")
+        with st.form("voucher_generator"):
+            col_gen1, col_gen2, col_gen3, col_gen4 = st.columns(4)
+            with col_gen1:
+                voucher_count = st.number_input("Number", min_value=1, max_value=500, value=5)
+            with col_gen2:
+                voucher_prefix = st.text_input("Prefix", value="")
+            with col_gen3:
+                voucher_length = st.number_input("Length", min_value=4, max_value=16, value=6)
+            with col_gen4:
+                prof_opts = ["None"] + [p.get('name', '') for p in um_profiles] if um_profiles else ["None"]
+                voucher_profile = st.selectbox("Profile", prof_opts)
+            
+            generate_btn = st.form_submit_button("Generate Vouchers", use_container_width=True)
+            
+        if generate_btn:
+            with st.spinner("Generating..."):
+                if demo or api is None:
+                    new_vouchers = DemoData.generate_vouchers(voucher_count, voucher_length, voucher_prefix, voucher_profile)
+                else:
+                    new_vouchers = api.generate_vouchers(voucher_count, voucher_length, voucher_prefix, voucher_profile)
+                
+                if isinstance(new_vouchers, str):
+                    st.error(f"Error: {new_vouchers}")
+                elif new_vouchers:
+                    st.success(f"Successfully generated {len(new_vouchers)} vouchers!")
+                    with st.expander("View Generated Credentials", expanded=True):
+                        st.dataframe(pd.DataFrame(new_vouchers), use_container_width=True)
+                    
+                    if 'data_cache' in st.session_state:
+                        st.session_state.data_cache.pop('api_um_users', None)
+                        st.session_state.data_cache.pop('demo_um_users', None)
+
+        st.markdown("---")
+        st.markdown("### User Database")
+        
         if um_users:
             df = pd.DataFrame(um_users)
             df['Status'] = df['disabled'].apply(lambda x: '🔴 Disabled' if x else '🟢 Active')
-            st.dataframe(df[['username', 'shared_users', 'uptime_used', 'bytes_used', 'Status']], 
-                        use_container_width=True, hide_index=True)
+            
+            # Map Profiles if they exist
+            if um_user_profiles:
+                up_dict = {p['user']: p['profile'] for p in um_user_profiles}
+                df['Profile'] = df['username'].map(up_dict).fillna('None')
+            else:
+                df['Profile'] = 'None'
+            
+            search_um = st.text_input("Search User Manager Users", placeholder="Type a username...")
+            if search_um:
+                df = df[df['username'].str.contains(search_um, case=False, na=False)]
+                
+            display_df = df[['username', 'Profile', 'shared_users', 'uptime_used', 'bytes_used', 'Status']].rename(
+                columns={
+                    'username': 'Username',
+                    'shared_users': 'Shared Users',
+                    'uptime_used': 'Uptime Used',
+                    'bytes_used': 'Data Used'
+                }
+            )
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
 
             active_um = len([u for u in um_users if not u['disabled']])
             col1, col2 = st.columns(2)
@@ -954,16 +1176,51 @@ def main():
                 fig = create_user_pie_chart(active_um, len(um_users))
                 st.plotly_chart(fig, use_container_width=True, key="um_pie")
             with col2:
-                render_metric_card("Total Vouchers", len(um_users), f"{active_um} active", "#b967ff", "🎫")
+                render_metric_card("Total Vouchers", len(um_users), f"{active_um} active", "#8957e5", "🎫")
         else:
             st.info("No UserManager users found")
 
     with tab3:
         if um_sessions:
             df = pd.DataFrame(um_sessions)
+            df = df.rename(columns={
+                'user': 'Username',
+                'calling_station': 'MAC Address',
+                'uptime': 'Session Uptime',
+                'bytes_in': 'Download',
+                'bytes_out': 'Upload'
+            })
+            
+            search_sessions = st.text_input("Search Active Sessions", placeholder="Type a username or MAC...")
+            if search_sessions:
+                df = df[df.apply(lambda row: df.astype(str).apply(lambda x: search_sessions.lower() in x.lower(), axis=1)).any(axis=1)]
+                
             st.dataframe(df, use_container_width=True, hide_index=True)
         else:
             st.info("No active UserManager sessions")
+
+    with tab4:
+        st.markdown("### Available Profiles")
+        if um_profiles:
+            df_profiles = pd.DataFrame(um_profiles)
+            df_profiles = df_profiles.rename(columns={'name': 'Profile Name', 'price': 'Price', 'validity': 'Validity'})
+            st.dataframe(df_profiles, use_container_width=True, hide_index=True)
+        else:
+            st.info("No profiles found")
+            
+        st.markdown("---")
+        st.markdown("### Profile Allocation")
+        if um_user_profiles:
+            df_up = pd.DataFrame(um_user_profiles)
+            df_up = df_up.rename(columns={'user': 'Username', 'profile': 'Assigned Profile'})
+            
+            search_up = st.text_input("Search Assigned Profiles", placeholder="Type a username...")
+            if search_up:
+                df_up = df_up[df_up['Username'].str.contains(search_up, case=False, na=False)]
+                
+            st.dataframe(df_up, use_container_width=True, hide_index=True)
+        else:
+            st.info("No user-profiles found")
 
     # ==================== LOGS SECTION ====================
     st.markdown('<div class="section-header">System Logs</div>', unsafe_allow_html=True)
@@ -996,8 +1253,42 @@ def main():
 
     # ==================== AUTO REFRESH ====================
     if auto_refresh:
-        time.sleep(0.5)
+        time.sleep(st.session_state.config['refresh_interval'])
         st.rerun()
+
+
+def main():
+    st.set_page_config(
+        page_title="MikroTik Dashboard",
+        page_icon="📡",
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
+    apply_dark_theme()
+
+    if 'authenticated' not in st.session_state:
+        st.session_state.authenticated = False
+
+    if not st.session_state.authenticated:
+        login_placeholder = st.empty()
+        with login_placeholder.container():
+            st.markdown("<br><br><br>", unsafe_allow_html=True)
+            col1, col2, col3 = st.columns([1, 1, 1])
+            with col2:
+                st.markdown("<h2 style='text-align: center; color: var(--text-primary); margin-bottom: 20px;'>🔒 Secure Login</h2>", unsafe_allow_html=True)
+                with st.form("login_form"):
+                    user_input = st.text_input("Username")
+                    pass_input = st.text_input("Password", type="password")
+                    submit_btn = st.form_submit_button("Login", use_container_width=True)
+                    
+                    if submit_btn:
+                        if user_input == ADMIN_USER and pass_input == ADMIN_PASS:
+                            st.session_state.authenticated = True
+                            st.rerun()
+                        else:
+                            st.error("Invalid credentials")
+    else:
+        render_dashboard()
 
 
 if __name__ == "__main__":
