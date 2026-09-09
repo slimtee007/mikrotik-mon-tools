@@ -22,6 +22,7 @@ import threading
 from datetime import datetime, timedelta
 from collections import deque
 import json
+import requests
 import os
 
 # MikroTik API
@@ -39,7 +40,9 @@ DEFAULT_CONFIG = {
     "port": 8728,
     "use_ssl": False,
     "refresh_interval": 5,
-    "history_length": 60
+    "history_length": 60,
+    "billing_provider": "None",
+    "billing_key": ""
 }
 
 CONFIG_FILE = "mikrotik_config.json"
@@ -760,6 +763,16 @@ def main():
                     store.add_log("info", "Switched to demo mode")
                     st.rerun()
 
+
+        with st.expander("💳 Billing Integration (NGN)"):
+            b_prov = st.session_state.config.get('billing_provider', 'None')
+            billing_provider = st.selectbox("Payment Gateway", ["None", "Paystack", "Flutterwave"], index=["None", "Paystack", "Flutterwave"].index(b_prov) if b_prov in ["None", "Paystack", "Flutterwave"] else 0)
+            billing_key = st.text_input("Secret API Key", value=st.session_state.config.get('billing_key', ''), type="password")
+            if st.button("Save Billing", use_container_width=True):
+                st.session_state.config['billing_provider'] = billing_provider
+                st.session_state.config['billing_key'] = billing_key
+                st.rerun()
+
         # Status indicator
         if st.session_state.demo_mode:
             st.markdown("""
@@ -991,6 +1004,68 @@ def main():
 
     # ==================== HOTSPOT / USERMANAGER ====================
     st.markdown('<div class="section-header">Hotspot & UserManager</div>', unsafe_allow_html=True)
+
+    # Revenue Calculation
+    today_revenue = 0.0
+    b_prov = st.session_state.config.get('billing_provider', 'None')
+    b_key = st.session_state.config.get('billing_key', '')
+    
+    def fetch_revenue():
+        if b_prov == "Paystack" and b_key:
+            try:
+                today = datetime.now().strftime("%Y-%m-%dT00:00:00.000Z")
+                res = requests.get(f"https://api.paystack.co/transaction?status=success&from={today}", 
+                                 headers={"Authorization": f"Bearer {b_key}"})
+                data = res.json()
+                return sum(t.get('amount', 0) for t in data.get('data', [])) / 100
+            except:
+                return 0.0
+        elif b_prov == "Flutterwave" and b_key:
+            try:
+                today = datetime.now().strftime("%Y-%m-%d")
+                res = requests.get(f"https://api.flutterwave.com/v3/transactions?status=successful&from={today}", 
+                                 headers={"Authorization": f"Bearer {b_key}"})
+                data = res.json()
+                return sum(t.get('amount', 0) for t in data.get('data', []))
+            except:
+                return 0.0
+        return 0.0
+        
+    today_revenue = fetch_with_cache("daily_revenue", fetch_revenue, ttl=60)
+    
+    # Estimated revenue based on active UM users and profiles
+    estimated_revenue = 0.0
+    if um_users and um_profiles and um_user_profiles:
+        try:
+            prof_prices = {p['name']: float(p.get('price', 0) or 0) for p in um_profiles}
+            for u in um_users:
+                if not u.get('disabled', True):
+                    # Find profile
+                    assigned = next((up['profile'] for up in um_user_profiles if up['user'] == u['username']), None)
+                    if assigned and assigned in prof_prices:
+                        estimated_revenue += prof_prices[assigned]
+        except:
+            pass
+
+    rev_col1, rev_col2 = st.columns(2)
+    with rev_col1:
+        render_metric_card(
+            "Today's Live Revenue (API)", 
+            f"₦ {today_revenue:,.2f}", 
+            f"via {b_prov}" if b_prov != "None" else "No Gateway Connected", 
+            "#238636", 
+            "💳"
+        )
+    with rev_col2:
+        render_metric_card(
+            "Estimated Active Value", 
+            f"₦ {estimated_revenue:,.2f}", 
+            "Based on active users × profile price", 
+            "#2f81f7", 
+            "📈"
+        )
+    
+    st.markdown("<br>", unsafe_allow_html=True)
 
     tab1, tab2, tab3, tab4 = st.tabs(["Active Hotspot", "User Manager", "Active Sessions", "UM Profiles"])
 
