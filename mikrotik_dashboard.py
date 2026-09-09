@@ -24,6 +24,10 @@ from collections import deque
 import json
 import requests
 import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # MikroTik API
 try:
@@ -34,16 +38,20 @@ except ImportError:
 
 # ==================== CONFIGURATION ====================
 DEFAULT_CONFIG = {
-    "host": "192.168.88.1",
-    "username": "admin",
-    "password": "",
-    "port": 8728,
-    "use_ssl": False,
+    "host": os.getenv("MIKROTIK_HOST", "192.168.88.1"),
+    "username": os.getenv("MIKROTIK_USER", "admin"),
+    "password": os.getenv("MIKROTIK_PASS", ""),
+    "port": int(os.getenv("MIKROTIK_PORT", "8728")),
+    "use_ssl": os.getenv("MIKROTIK_SSL", "False").lower() == "true",
     "refresh_interval": 5,
     "history_length": 60,
-    "billing_provider": "None",
-    "billing_key": ""
+    "billing_provider": os.getenv("BILLING_PROVIDER", "None"),
+    "billing_key": os.getenv("BILLING_KEY", "")
 }
+
+# Admin Login Credentials
+ADMIN_USER = os.getenv("ADMIN_USER", "admin")
+ADMIN_PASS = os.getenv("ADMIN_PASS", "password123")
 
 CONFIG_FILE = "mikrotik_config.json"
 
@@ -712,6 +720,32 @@ def main():
     )
 
     apply_dark_theme()
+
+    # --- Authentication Block ---
+    if 'authenticated' not in st.session_state:
+        st.session_state.authenticated = False
+
+    if not st.session_state.authenticated:
+        st.markdown("<br><br><br>", unsafe_allow_html=True)
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col2:
+            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+            st.markdown("<h2 style='text-align: center; color: var(--text-primary); margin-bottom: 20px;'>🔒 Secure Login</h2>", unsafe_allow_html=True)
+            
+            with st.form("login_form"):
+                user_input = st.text_input("Username")
+                pass_input = st.text_input("Password", type="password")
+                submit_btn = st.form_submit_button("Login", use_container_width=True)
+                
+                if submit_btn:
+                    if user_input == ADMIN_USER and pass_input == ADMIN_PASS:
+                        st.session_state.authenticated = True
+                        st.rerun()
+                    else:
+                        st.error("Invalid credentials")
+            st.markdown('</div>', unsafe_allow_html=True)
+        return
+    # ---------------------------
 
     # Initialize session state
     if 'store' not in st.session_state:
