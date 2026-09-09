@@ -406,17 +406,20 @@ class MikroTikAPI:
             return []
 
 
-    def generate_vouchers(self, count=1, length=6, prefix=""):
+    def _get_um_resource(self, path):
+        """Helper to get UM resource, falling back from v6 to v7 path"""
+        try:
+            return self.api.get_resource(f'/tool/user-manager/{path}')
+        except Exception:
+            return self.api.get_resource(f'/user-manager/{path}')
+
+    def generate_vouchers(self, count=1, length=6, prefix="", profile=None):
         """Generate random vouchers in UserManager"""
         import random
         import string
         try:
-            # Try RouterOS v6 path first, then v7
-            try:
-                user_resource = self.api.get_resource('/tool/user-manager/user')
-            except Exception:
-                user_resource = self.api.get_resource('/user-manager/user')
-
+            user_resource = self._get_um_resource('user')
+            up_resource = self._get_um_resource('user-profile')
             vouchers = []
             for _ in range(count):
                 chars = string.ascii_lowercase + string.digits
@@ -429,6 +432,15 @@ class MikroTikAPI:
                     # In RouterOS v7 or different config, customer might not be needed
                     user_resource.add(username=username, password=password)
                 
+                if profile and profile != "None":
+                    try:
+                        up_resource.add(customer="admin", user=username, profile=profile)
+                    except Exception:
+                        try:
+                            up_resource.add(user=username, profile=profile)
+                        except Exception:
+                            pass # Profile binding failed
+                            
                 vouchers.append({'username': username, 'password': password})
             return vouchers
         except Exception as e:
@@ -437,7 +449,7 @@ class MikroTikAPI:
     def get_usermanager_users(self):
         """Get UserManager users and vouchers"""
         try:
-            users = self.api.get_resource('/tool/user-manager/user')
+            users = self._get_um_resource('user')
             all_users = users.get()
             return [{
                 'username': u.get('username', 'N/A'),
@@ -452,7 +464,7 @@ class MikroTikAPI:
     def get_usermanager_sessions(self):
         """Get active UserManager sessions"""
         try:
-            sessions = self.api.get_resource('/tool/user-manager/session')
+            sessions = self._get_um_resource('session')
             active_sessions = sessions.get()
             return [{
                 'user': s.get('user', 'N/A'),
@@ -461,6 +473,31 @@ class MikroTikAPI:
                 'bytes_in': self._format_bytes(int(s.get('bytes-in', 0))),
                 'bytes_out': self._format_bytes(int(s.get('bytes-out', 0)))
             } for s in active_sessions]
+        except Exception:
+            return []
+
+    def get_usermanager_profiles(self):
+        """Get UserManager profiles"""
+        try:
+            profiles = self._get_um_resource('profile')
+            all_profiles = profiles.get()
+            return [{
+                'name': p.get('name', 'N/A'),
+                'price': p.get('price', '0'),
+                'validity': p.get('validity', '0s')
+            } for p in all_profiles]
+        except Exception:
+            return []
+
+    def get_usermanager_user_profiles(self):
+        """Get UserManager user profiles"""
+        try:
+            u_profiles = self._get_um_resource('user-profile')
+            all_u_profiles = u_profiles.get()
+            return [{
+                'user': p.get('user', 'N/A'),
+                'profile': p.get('profile', 'N/A'),
+            } for p in all_u_profiles]
         except Exception:
             return []
 
@@ -547,7 +584,7 @@ class DemoData:
 
 
     @classmethod
-    def generate_vouchers(cls, count=1, length=6, prefix=""):
+    def generate_vouchers(cls, count=1, length=6, prefix="", profile=None):
         import random
         import string
         import time
@@ -572,6 +609,22 @@ class DemoData:
         return [
             {'user': 'guest001', 'calling_station': 'AA:BB:CC:11:22:33', 'uptime': '2h15m', 'bytes_in': '1.2 GB', 'bytes_out': '450 MB'},
             {'user': 'guest002', 'calling_station': 'DD:EE:FF:44:55:66', 'uptime': '45m', 'bytes_in': '350 MB', 'bytes_out': '120 MB'},
+        ]
+
+
+    @staticmethod
+    def get_usermanager_profiles():
+        return [
+            {'name': '1-Hour', 'price': '1.00', 'validity': '1h'},
+            {'name': '1-Day', 'price': '10.00', 'validity': '1d'},
+            {'name': '1-Week', 'price': '50.00', 'validity': '1w'}
+        ]
+
+    @staticmethod
+    def get_usermanager_user_profiles():
+        return [
+            {'user': 'voucher_1day', 'profile': '1-Day'},
+            {'user': 'voucher_1week', 'profile': '1-Week'}
         ]
 
     @staticmethod
@@ -826,6 +879,8 @@ def main():
         hotspot_users = DemoData.get_active_hotspot_users()
         um_users = fetch_with_cache("demo_um_users", DemoData.get_usermanager_users, ttl=30)
         um_sessions = DemoData.get_usermanager_sessions()
+        um_profiles = fetch_with_cache("demo_um_profiles", DemoData.get_usermanager_profiles, ttl=30)
+        um_user_profiles = fetch_with_cache("demo_um_user_profiles", DemoData.get_usermanager_user_profiles, ttl=30)
         logs = fetch_with_cache("demo_logs", DemoData.get_logs, ttl=10)
     else:
         resources = api.get_system_resources()
@@ -835,6 +890,8 @@ def main():
         # Cache UserManager users for 30s as this list can be huge and slow to fetch
         um_users = fetch_with_cache("api_um_users", api.get_usermanager_users, ttl=30)
         um_sessions = api.get_usermanager_sessions()
+        um_profiles = fetch_with_cache("api_um_profiles", api.get_usermanager_profiles, ttl=30)
+        um_user_profiles = fetch_with_cache("api_um_user_profiles", api.get_usermanager_user_profiles, ttl=30)
         # Cache logs for 10s to reduce router load
         logs = fetch_with_cache("api_logs", api.get_logs, ttl=10)
 
@@ -984,7 +1041,7 @@ def main():
     # ==================== HOTSPOT / USERMANAGER ====================
     st.markdown('<div class="section-header">Hotspot & UserManager</div>', unsafe_allow_html=True)
 
-    tab1, tab2, tab3 = st.tabs(["🔥 Active Hotspot Users", "👥 UserManager Users", "🔑 Active Sessions"])
+    tab1, tab2, tab3, tab4 = st.tabs(["🔥 Active Hotspot Users", "👥 UserManager Users", "🔑 Active Sessions", "📋 UM Profiles"])
 
     with tab1:
         if hotspot_users:
@@ -1004,22 +1061,25 @@ def main():
     with tab2:
         st.markdown("### 🎫 Voucher Generator")
         with st.form("voucher_generator"):
-            col_gen1, col_gen2, col_gen3 = st.columns(3)
+            col_gen1, col_gen2, col_gen3, col_gen4 = st.columns(4)
             with col_gen1:
-                voucher_count = st.number_input("Number of Vouchers", min_value=1, max_value=500, value=5)
+                voucher_count = st.number_input("Number", min_value=1, max_value=500, value=5)
             with col_gen2:
-                voucher_prefix = st.text_input("Prefix (Optional)", value="")
+                voucher_prefix = st.text_input("Prefix", value="")
             with col_gen3:
-                voucher_length = st.number_input("Random Length", min_value=4, max_value=16, value=6)
+                voucher_length = st.number_input("Length", min_value=4, max_value=16, value=6)
+            with col_gen4:
+                prof_opts = ["None"] + [p.get('name', '') for p in um_profiles] if um_profiles else ["None"]
+                voucher_profile = st.selectbox("Profile", prof_opts)
             
             generate_btn = st.form_submit_button("Generate Vouchers", use_container_width=True)
             
         if generate_btn:
             with st.spinner("Generating..."):
                 if demo or api is None:
-                    new_vouchers = DemoData.generate_vouchers(voucher_count, voucher_length, voucher_prefix)
+                    new_vouchers = DemoData.generate_vouchers(voucher_count, voucher_length, voucher_prefix, voucher_profile)
                 else:
-                    new_vouchers = api.generate_vouchers(voucher_count, voucher_length, voucher_prefix)
+                    new_vouchers = api.generate_vouchers(voucher_count, voucher_length, voucher_prefix, voucher_profile)
                 
                 if isinstance(new_vouchers, str):
                     st.error(f"Error: {new_vouchers}")
@@ -1057,6 +1117,22 @@ def main():
             st.dataframe(df, use_container_width=True, hide_index=True)
         else:
             st.info("No active UserManager sessions")
+
+    with tab4:
+        st.markdown("### 📋 Available Profiles")
+        if um_profiles:
+            df_profiles = pd.DataFrame(um_profiles)
+            st.dataframe(df_profiles, use_container_width=True, hide_index=True)
+        else:
+            st.info("No profiles found")
+            
+        st.markdown("---")
+        st.markdown("### 👤 User Profiles Allocation")
+        if um_user_profiles:
+            df_up = pd.DataFrame(um_user_profiles)
+            st.dataframe(df_up, use_container_width=True, hide_index=True)
+        else:
+            st.info("No user-profiles found")
 
     # ==================== LOGS SECTION ====================
     st.markdown('<div class="section-header">System Logs</div>', unsafe_allow_html=True)
