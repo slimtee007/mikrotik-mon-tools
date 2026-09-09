@@ -625,7 +625,7 @@ def create_time_series(timestamps, data_dict, title, colors):
     fig.update_layout(
         title={'text': title, 'font': {'color': '#e2e8f0', 'size': 16}},
         paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='transparent',
+        plot_bgcolor='rgba(0,0,0,0)',
         font={'color': '#94a3b8', 'family': 'Inter'},
         xaxis=dict(gridcolor='#30363d', showgrid=True),
         yaxis=dict(gridcolor='#30363d', showgrid=True),
@@ -649,7 +649,7 @@ def create_network_usage_chart(interfaces):
         barmode='group',
         title={'text': 'Interface Traffic (GB)', 'font': {'color': '#e2e8f0', 'size': 16}},
         paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='transparent',
+        plot_bgcolor='rgba(0,0,0,0)',
         font={'color': '#94a3b8', 'family': 'Inter'},
         xaxis=dict(gridcolor='#30363d'),
         yaxis=dict(gridcolor='#30363d', title='GB'),
