@@ -48,66 +48,59 @@ CONFIG_FILE = "mikrotik_config.json"
 def apply_dark_theme():
     st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
 
     :root {
-        --bg-primary: #061121;
-        --bg-secondary: #0a192f;
-        --bg-card: #112240;
-        --bg-card-hover: #1e3a5f;
-        --accent-cyan: #64ffda;
-        --accent-green: #48bb78;
-        --accent-orange: #ed8936;
-        --accent-red: #e53e3e;
-        --accent-purple: #9f7aea;
-        --text-primary: #ccd6f6;
-        --text-secondary: #8892b0;
-        --border-color: #233554;
+        --bg-primary: #0e1117;
+        --bg-secondary: #161b22;
+        --bg-card: #161b22;
+        --accent-primary: #2f81f7;
+        --accent-green: #238636;
+        --accent-orange: #d29922;
+        --accent-red: #da3633;
+        --text-primary: #e6edf3;
+        --text-secondary: #848d97;
+        --border-color: #30363d;
     }
 
     .stApp {
-        background: linear-gradient(135deg, #020c1b 0%, #0a192f 50%, #061121 100%);
-        font-family: 'Inter', sans-serif;
+        background-color: var(--bg-primary);
+        font-family: 'Inter', -apple-system, sans-serif;
     }
 
-    /* Glassmorphism cards */
+    /* Clean cards, no glassmorphism */
     .metric-card {
-        background: rgba(17, 34, 64, 0.75);
-        backdrop-filter: blur(20px);
-        border: 1px solid rgba(100, 255, 218, 0.15);
-        border-radius: 16px;
-        padding: 20px;
-        margin: 10px 0;
-        transition: all 0.3s ease;
-        box-shadow: 0 4px 24px rgba(2, 12, 27, 0.5);
+        background-color: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 16px 20px;
+        margin: 8px 0;
+        transition: border-color 0.2s ease;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.12);
     }
 
     .metric-card:hover {
-        transform: translateY(-2px);
-        border-color: rgba(100, 255, 218, 0.4);
-        box-shadow: 0 8px 32px rgba(100, 255, 218, 0.15);
+        border-color: #8b949e;
     }
 
     .metric-title {
         color: var(--text-secondary);
         font-size: 0.85rem;
         font-weight: 500;
-        text-transform: uppercase;
-        letter-spacing: 1px;
         margin-bottom: 8px;
     }
 
     .metric-value {
+        font-size: 1.75rem;
+        font-weight: 600;
         color: var(--text-primary);
-        font-size: 2rem;
-        font-weight: 700;
-        font-family: 'Inter', sans-serif;
+        margin-bottom: 4px;
+        letter-spacing: -0.5px;
     }
 
-    .metric-sub {
+    .metric-subtitle {
+        font-size: 0.75rem;
         color: var(--text-secondary);
-        font-size: 0.8rem;
-        margin-top: 4px;
     }
 
     /* Status indicators */
@@ -115,126 +108,46 @@ def apply_dark_theme():
         display: inline-block;
         width: 8px;
         height: 8px;
-        background: var(--accent-green);
+        background-color: var(--accent-green);
         border-radius: 50%;
         box-shadow: 0 0 8px var(--accent-green);
-        animation: pulse 2s infinite;
     }
 
     .status-offline {
         display: inline-block;
         width: 8px;
         height: 8px;
-        background: var(--accent-red);
+        background-color: var(--accent-orange);
         border-radius: 50%;
-        box-shadow: 0 0 8px var(--accent-red);
     }
 
-    @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.5; }
-    }
-
-    /* Section headers */
     .section-header {
+        font-size: 1.25rem;
+        font-weight: 600;
         color: var(--text-primary);
-        font-size: 1.3rem;
-        font-weight: 600;
         margin: 24px 0 16px 0;
-        padding-left: 12px;
-        border-left: 3px solid var(--accent-cyan);
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--border-color);
     }
 
-    /* Tables */
-    .stDataFrame {
-        background: var(--bg-card) !important;
-        border-radius: 12px;
+    /* Modernize logs */
+    .log-container {
+        max-height: 400px;
+        overflow-y: auto;
+        font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+        font-size: 0.8rem;
+        background-color: var(--bg-card);
         border: 1px solid var(--border-color);
-    }
-
-    /* Scrollbar */
-    ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
-    }
-
-    ::-webkit-scrollbar-track {
-        background: var(--bg-primary);
-    }
-
-    ::-webkit-scrollbar-thumb {
-        background: #374151;
-        border-radius: 4px;
-    }
-
-    ::-webkit-scrollbar-thumb:hover {
-        background: #4b5563;
-    }
-
-    /* Sidebar */
-    .css-1d391kg, .css-163ttbj {
-        background: var(--bg-secondary) !important;
-    }
-
-    /* Buttons */
-    .stButton>button {
-        background: linear-gradient(135deg, #64ffda, #0099cc);
-        color: white;
-        border: none;
-        border-radius: 8px;
-        padding: 10px 24px;
-        font-weight: 600;
-        transition: all 0.3s ease;
-    }
-
-    .stButton>button:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 16px rgba(0, 212, 255, 0.4);
-    }
-
-    /* Tabs */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-        background: var(--bg-card);
-        padding: 8px;
-        border-radius: 12px;
-    }
-
-    .stTabs [data-baseweb="tab"] {
-        background: transparent;
-        border-radius: 8px;
-        color: var(--text-secondary);
-        font-weight: 500;
-    }
-
-    .stTabs [aria-selected="true"] {
-        background: rgba(0, 212, 255, 0.15) !important;
-        color: var(--accent-cyan) !important;
-    }
-
-    /* Log entries */
-    .log-entry {
-        font-family: 'Courier New', monospace;
-        font-size: 0.85rem;
-        padding: 6px 12px;
         border-radius: 6px;
-        margin: 2px 0;
+        padding: 12px;
     }
-
-    .log-info { background: rgba(0, 212, 255, 0.1); color: #64ffda; }
-    .log-warning { background: rgba(255, 145, 0, 0.1); color: #ed8936; }
-    .log-error { background: rgba(255, 82, 82, 0.1); color: #ff5252; }
-    .log-success { background: rgba(0, 230, 118, 0.1); color: #48bb78; }
-
-    /* Animations */
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-
-    .animate-in {
-        animation: fadeIn 0.5s ease forwards;
-    }
+    .log-entry { margin-bottom: 6px; padding: 4px 8px; border-radius: 4px; }
+    .log-info { color: var(--text-primary); }
+    .log-warning { color: var(--accent-orange); }
+    .log-success { color: var(--accent-green); }
+    
+    /* Hide default header */
+    header { visibility: hidden; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -705,17 +618,17 @@ def create_time_series(timestamps, data_dict, title, colors):
             y=list(data),
             mode='lines',
             name=label,
-            line=dict(color=colors.get(label, '#64ffda'), width=2),
+            line=dict(color=colors.get(label, '#2f81f7'), width=2),
             fill='tozeroy',
-            fillcolor=f"rgba{tuple(list(int(colors.get(label, '#64ffda')[i:i+2], 16) for i in (1, 3, 5)) + [0.1])}"
+            fillcolor=f"rgba{tuple(list(int(colors.get(label, '#2f81f7')[i:i+2], 16) for i in (1, 3, 5)) + [0.1])}"
         ))
     fig.update_layout(
         title={'text': title, 'font': {'color': '#e2e8f0', 'size': 16}},
         paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(26, 31, 46, 0.5)',
+        plot_bgcolor='transparent',
         font={'color': '#94a3b8', 'family': 'Inter'},
-        xaxis=dict(gridcolor='rgba(255,255,255,0.05)', showgrid=True),
-        yaxis=dict(gridcolor='rgba(255,255,255,0.05)', showgrid=True),
+        xaxis=dict(gridcolor='#30363d', showgrid=True),
+        yaxis=dict(gridcolor='#30363d', showgrid=True),
         legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
         margin=dict(l=40, r=20, t=60, b=40),
         height=300
@@ -729,17 +642,17 @@ def create_network_usage_chart(interfaces):
     tx_vals = [i['tx_raw'] / (1024**3) for i in interfaces]
 
     fig = go.Figure(data=[
-        go.Bar(name='RX (Download)', x=names, y=rx_vals, marker_color='#64ffda'),
-        go.Bar(name='TX (Upload)', x=names, y=tx_vals, marker_color='#9f7aea')
+        go.Bar(name='RX (Download)', x=names, y=rx_vals, marker_color='#2f81f7'),
+        go.Bar(name='TX (Upload)', x=names, y=tx_vals, marker_color='#8957e5')
     ])
     fig.update_layout(
         barmode='group',
         title={'text': 'Interface Traffic (GB)', 'font': {'color': '#e2e8f0', 'size': 16}},
         paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(26, 31, 46, 0.5)',
+        plot_bgcolor='transparent',
         font={'color': '#94a3b8', 'family': 'Inter'},
-        xaxis=dict(gridcolor='rgba(255,255,255,0.05)'),
-        yaxis=dict(gridcolor='rgba(255,255,255,0.05)', title='GB'),
+        xaxis=dict(gridcolor='#30363d'),
+        yaxis=dict(gridcolor='#30363d', title='GB'),
         legend=dict(orientation='h', yanchor='bottom', y=1.02),
         margin=dict(l=40, r=20, t=60, b=40),
         height=300
@@ -752,7 +665,7 @@ def create_user_pie_chart(active_count, total_count):
         labels=['Active', 'Inactive'],
         values=[active_count, max(0, total_count - active_count)],
         hole=0.6,
-        marker_colors=['#48bb78', '#2d3748'],
+        marker_colors=['#238636', '#2d3748'],
         textinfo='none'
     )])
     fig.update_layout(
@@ -802,7 +715,7 @@ def main():
     with st.sidebar:
         st.markdown("""
         <div style="text-align: center; padding: 20px 0;">
-            <h1 style="color: #64ffda; font-size: 1.5rem; margin: 0;">📡 MikroTik</h1>
+            <h1 style="color: #e6edf3; font-size: 1.25rem; font-weight: 600; margin: 0;">MikroTik Monitor</h1>
             <p style="color: #94a3b8; font-size: 0.8rem; margin: 5px 0 0 0;">Hotspot & Billing Monitor</p>
         </div>
         """, unsafe_allow_html=True)
@@ -810,7 +723,7 @@ def main():
         st.markdown("---")
 
         # Connection Settings
-        with st.expander("🔌 Connection", expanded=True):
+        with st.expander("Connection Settings", expanded=True):
             host = st.text_input("Host", value=st.session_state.config['host'])
             username = st.text_input("Username", value=st.session_state.config['username'])
             password = st.text_input("Password", value=st.session_state.config['password'], type="password")
@@ -841,14 +754,14 @@ def main():
             st.markdown("""
             <div style="display: flex; align-items: center; gap: 8px; padding: 10px; background: rgba(255, 145, 0, 0.1); border-radius: 8px;">
                 <span class="status-offline"></span>
-                <span style="color: #ed8936; font-size: 0.9rem;">Demo Mode</span>
+                <span style="color: #d29922; font-size: 0.9rem;">Demo Mode</span>
             </div>
             """, unsafe_allow_html=True)
         else:
             st.markdown("""
             <div style="display: flex; align-items: center; gap: 8px; padding: 10px; background: rgba(0, 230, 118, 0.1); border-radius: 8px;">
                 <span class="status-online"></span>
-                <span style="color: #48bb78; font-size: 0.9rem;">Connected</span>
+                <span style="color: #238636; font-size: 0.9rem;">Connected</span>
             </div>
             """, unsafe_allow_html=True)
 
@@ -878,7 +791,7 @@ def main():
         </div>
         <div style="text-align: right;">
             <p style="color: #64748b; margin: 0; font-size: 0.8rem;">Last Update</p>
-            <p style="color: #64ffda; margin: 0; font-size: 1rem; font-weight: 600;">{}</p>
+            <p style="color: #2f81f7; margin: 0; font-size: 1rem; font-weight: 600;">{}</p>
         </div>
     </div>
     """.format(store.last_update.strftime("%H:%M:%S") if store.last_update else "--:--:--"), unsafe_allow_html=True)
@@ -939,7 +852,7 @@ def main():
             "CPU Load",
             f"{resources['cpu_load']}%" if resources else "N/A",
             f"Architecture: {resources.get('architecture', 'N/A')}" if resources else "",
-            "#64ffda",
+            "#2f81f7",
             "🖥️"
         )
 
@@ -949,7 +862,7 @@ def main():
             "RAM Usage",
             f"{ram_pct}%" if resources else "N/A",
             f"Free: {MikroTikAPI._format_bytes(resources['free_memory']) if resources else 'N/A'}",
-            "#9f7aea",
+            "#8957e5",
             "💾"
         )
 
@@ -961,14 +874,14 @@ def main():
             "Power Draw",
             f"{power_val:.1f}W" if power else "N/A",
             f"{voltage_val:.1f}V @ {current_val:.2f}A" if power else "",
-            "#48bb78",
+            "#238636",
             "⚡"
         )
 
     with col4:
         temp = power.get('temperature') if power else None
         temp_display = f"{temp:.1f}°C" if isinstance(temp, (int, float)) else "N/A"
-        temp_color = "#ed8936" if isinstance(temp, (int, float)) and temp > 60 else "#48bb78"
+        temp_color = "#d29922" if isinstance(temp, (int, float)) and temp > 60 else "#238636"
         render_metric_card(
             "Temperature",
             temp_display,
@@ -994,18 +907,18 @@ def main():
 
     with col1:
         if resources:
-            fig = create_gauge_chart(resources['cpu_load'], "CPU", "#64ffda")
+            fig = create_gauge_chart(resources['cpu_load'], "CPU", "#2f81f7")
             st.plotly_chart(fig, use_container_width=True, key="cpu_gauge")
 
     with col2:
         if resources:
-            fig = create_gauge_chart(ram_pct, "RAM", "#9f7aea")
+            fig = create_gauge_chart(ram_pct, "RAM", "#8957e5")
             st.plotly_chart(fig, use_container_width=True, key="ram_gauge")
 
     with col3:
         if power and isinstance(power.get('temperature'), (int, float)):
             temp_val = min(power['temperature'], 100)
-            fig = create_gauge_chart(temp_val, "Temp", "#ed8936", "°C")
+            fig = create_gauge_chart(temp_val, "Temp", "#d29922", "°C")
             st.plotly_chart(fig, use_container_width=True, key="temp_gauge")
         else:
             fig = create_gauge_chart(0, "Temp", "#64748b", "°C")
@@ -1020,7 +933,7 @@ def main():
                 store.timestamps,
                 {"CPU": store.cpu_history, "RAM": store.ram_history},
                 "CPU & RAM History",
-                {"CPU": "#64ffda", "RAM": "#9f7aea"}
+                {"CPU": "#2f81f7", "RAM": "#8957e5"}
             )
             st.plotly_chart(fig, use_container_width=True, key="sys_history")
 
@@ -1030,7 +943,7 @@ def main():
                 store.timestamps,
                 {"Active Users": store.active_users_history},
                 "Active Hotspot Users",
-                {"Active Users": "#48bb78"}
+                {"Active Users": "#238636"}
             )
             st.plotly_chart(fig, use_container_width=True, key="users_history")
 
@@ -1048,7 +961,7 @@ def main():
         if interfaces:
             st.markdown("""
             <div class="metric-card">
-                <div class="metric-title">📊 Interface Status</div>
+                <div class="metric-title">Interface Status</div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -1065,7 +978,7 @@ def main():
     # ==================== HOTSPOT / USERMANAGER ====================
     st.markdown('<div class="section-header">Hotspot & UserManager</div>', unsafe_allow_html=True)
 
-    tab1, tab2, tab3, tab4 = st.tabs(["🔥 Active Hotspot Users", "👥 UserManager Users", "🔑 Active Sessions", "📋 UM Profiles"])
+    tab1, tab2, tab3, tab4 = st.tabs(["Active Hotspot", "User Manager", "Active Sessions", "UM Profiles"])
 
     with tab1:
         if hotspot_users:
@@ -1079,7 +992,7 @@ def main():
                 'bytes_out': 'Upload'
             })
             
-            search_hotspot = st.text_input("🔍 Search Active Hotspot Users", placeholder="Type a username...")
+            search_hotspot = st.text_input("Search Active Hotspot Users", placeholder="Type a username...")
             if search_hotspot:
                 df = df[df['Username'].str.contains(search_hotspot, case=False, na=False)]
                 
@@ -1088,7 +1001,7 @@ def main():
             <div style="display: flex; gap: 20px; margin-top: 10px;">
                 <div class="metric-card" style="flex: 1;">
                     <div class="metric-title">Total Active</div>
-                    <div class="metric-value" style="color: #48bb78;">{len(hotspot_users)}</div>
+                    <div class="metric-value" style="color: #238636;">{len(hotspot_users)}</div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -1096,7 +1009,7 @@ def main():
             st.info("No active hotspot users")
 
     with tab2:
-        st.markdown("### 🎫 Voucher Generator")
+        st.markdown("### Voucher Generator")
         with st.form("voucher_generator"):
             col_gen1, col_gen2, col_gen3, col_gen4 = st.columns(4)
             with col_gen1:
@@ -1130,13 +1043,13 @@ def main():
                         st.session_state.data_cache.pop('demo_um_users', None)
 
         st.markdown("---")
-        st.markdown("### 👥 Existing Users")
+        st.markdown("### User Database")
         
         if um_users:
             df = pd.DataFrame(um_users)
             df['Status'] = df['disabled'].apply(lambda x: '🔴 Disabled' if x else '🟢 Active')
             
-            search_um = st.text_input("🔍 Search User Manager Users", placeholder="Type a username...")
+            search_um = st.text_input("Search User Manager Users", placeholder="Type a username...")
             if search_um:
                 df = df[df['username'].str.contains(search_um, case=False, na=False)]
                 
@@ -1156,7 +1069,7 @@ def main():
                 fig = create_user_pie_chart(active_um, len(um_users))
                 st.plotly_chart(fig, use_container_width=True, key="um_pie")
             with col2:
-                render_metric_card("Total Vouchers", len(um_users), f"{active_um} active", "#9f7aea", "🎫")
+                render_metric_card("Total Vouchers", len(um_users), f"{active_um} active", "#8957e5", "🎫")
         else:
             st.info("No UserManager users found")
 
@@ -1171,7 +1084,7 @@ def main():
                 'bytes_out': 'Upload'
             })
             
-            search_sessions = st.text_input("🔍 Search Active Sessions", placeholder="Type a username or MAC...")
+            search_sessions = st.text_input("Search Active Sessions", placeholder="Type a username or MAC...")
             if search_sessions:
                 df = df[df.apply(lambda row: df.astype(str).apply(lambda x: search_sessions.lower() in x.lower(), axis=1)).any(axis=1)]
                 
@@ -1180,7 +1093,7 @@ def main():
             st.info("No active UserManager sessions")
 
     with tab4:
-        st.markdown("### 📋 Available Profiles")
+        st.markdown("### Available Profiles")
         if um_profiles:
             df_profiles = pd.DataFrame(um_profiles)
             df_profiles = df_profiles.rename(columns={'name': 'Profile Name', 'price': 'Price', 'validity': 'Validity'})
@@ -1189,12 +1102,12 @@ def main():
             st.info("No profiles found")
             
         st.markdown("---")
-        st.markdown("### 👤 User Profiles Allocation")
+        st.markdown("### Profile Allocation")
         if um_user_profiles:
             df_up = pd.DataFrame(um_user_profiles)
             df_up = df_up.rename(columns={'user': 'Username', 'profile': 'Assigned Profile'})
             
-            search_up = st.text_input("🔍 Search Assigned Profiles", placeholder="Type a username...")
+            search_up = st.text_input("Search Assigned Profiles", placeholder="Type a username...")
             if search_up:
                 df_up = df_up[df_up['Username'].str.contains(search_up, case=False, na=False)]
                 
