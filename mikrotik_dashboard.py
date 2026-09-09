@@ -443,8 +443,12 @@ class MikroTikAPI:
                 try:
                     user_resource.add(customer="admin", username=username, password=password)
                 except Exception:
-                    # In RouterOS v7 or different config, customer might not be needed
-                    user_resource.add(username=username, password=password)
+                    try:
+                        # RouterOS v6 without customer
+                        user_resource.add(username=username, password=password)
+                    except Exception:
+                        # RouterOS v7 uses 'name'
+                        user_resource.add(name=username, password=password)
                 
                 if profile and profile != "None":
                     try:
@@ -464,13 +468,23 @@ class MikroTikAPI:
         """Get UserManager users and vouchers"""
         try:
             all_users, _ = self._get_um_data('user')
-            return [{
-                'username': u.get('username', 'N/A'),
-                'shared_users': u.get('shared-users', '1'),
-                'uptime_used': u.get('uptime-used', '0s'),
-                'bytes_used': self._format_bytes(int(u.get('bytes-used', 0))),
-                'disabled': u.get('disabled', 'false') == 'true'
-            } for u in all_users]
+            
+            results = []
+            for u in all_users:
+                # Handle missing or empty bytes-used safely
+                try:
+                    b_used = int(u.get('bytes-used', 0))
+                except (ValueError, TypeError):
+                    b_used = 0
+                    
+                results.append({
+                    'username': u.get('name', u.get('username', 'N/A')),
+                    'shared_users': u.get('shared-users', '1'),
+                    'uptime_used': u.get('uptime-used', '0s'),
+                    'bytes_used': self._format_bytes(b_used),
+                    'disabled': u.get('disabled', 'false') == 'true'
+                })
+            return results
         except Exception:
             return []
 
