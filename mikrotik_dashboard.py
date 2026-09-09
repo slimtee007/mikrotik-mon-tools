@@ -729,7 +729,7 @@ def main():
         st.markdown("<br><br><br>", unsafe_allow_html=True)
         col1, col2, col3 = st.columns([1, 1, 1])
         with col2:
-            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+            
             st.markdown("<h2 style='text-align: center; color: var(--text-primary); margin-bottom: 20px;'>🔒 Secure Login</h2>", unsafe_allow_html=True)
             
             with st.form("login_form"):
@@ -743,8 +743,8 @@ def main():
                         st.rerun()
                     else:
                         st.error("Invalid credentials")
-            st.markdown('</div>', unsafe_allow_html=True)
-        return
+            
+        st.stop()
     # ---------------------------
 
     # Initialize session state
