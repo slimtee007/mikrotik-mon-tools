@@ -711,41 +711,7 @@ def render_metric_card(title, value, subtitle, color_class="", icon=""):
     """, unsafe_allow_html=True)
 
 
-def main():
-    st.set_page_config(
-        page_title="MikroTik Dashboard",
-        page_icon="📡",
-        layout="wide",
-        initial_sidebar_state="expanded"
-    )
-
-    apply_dark_theme()
-
-    # --- Authentication Block ---
-    if 'authenticated' not in st.session_state:
-        st.session_state.authenticated = False
-
-    if not st.session_state.authenticated:
-        st.markdown("<br><br><br>", unsafe_allow_html=True)
-        col1, col2, col3 = st.columns([1, 1, 1])
-        with col2:
-            
-            st.markdown("<h2 style='text-align: center; color: var(--text-primary); margin-bottom: 20px;'>🔒 Secure Login</h2>", unsafe_allow_html=True)
-            
-            with st.form("login_form"):
-                user_input = st.text_input("Username")
-                pass_input = st.text_input("Password", type="password")
-                submit_btn = st.form_submit_button("Login", use_container_width=True)
-                
-                if submit_btn:
-                    if user_input == ADMIN_USER and pass_input == ADMIN_PASS:
-                        st.session_state.authenticated = True
-                        st.rerun()
-                    else:
-                        st.error("Invalid credentials")
-            
-        st.stop()
-    # ---------------------------
+def render_dashboard():
 
     # Initialize session state
     if 'store' not in st.session_state:
@@ -1289,6 +1255,40 @@ def main():
     if auto_refresh:
         time.sleep(st.session_state.config['refresh_interval'])
         st.rerun()
+
+
+def main():
+    st.set_page_config(
+        page_title="MikroTik Dashboard",
+        page_icon="📡",
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
+    apply_dark_theme()
+
+    if 'authenticated' not in st.session_state:
+        st.session_state.authenticated = False
+
+    if not st.session_state.authenticated:
+        login_placeholder = st.empty()
+        with login_placeholder.container():
+            st.markdown("<br><br><br>", unsafe_allow_html=True)
+            col1, col2, col3 = st.columns([1, 1, 1])
+            with col2:
+                st.markdown("<h2 style='text-align: center; color: var(--text-primary); margin-bottom: 20px;'>🔒 Secure Login</h2>", unsafe_allow_html=True)
+                with st.form("login_form"):
+                    user_input = st.text_input("Username")
+                    pass_input = st.text_input("Password", type="password")
+                    submit_btn = st.form_submit_button("Login", use_container_width=True)
+                    
+                    if submit_btn:
+                        if user_input == ADMIN_USER and pass_input == ADMIN_PASS:
+                            st.session_state.authenticated = True
+                            st.rerun()
+                        else:
+                            st.error("Invalid credentials")
+    else:
+        render_dashboard()
 
 
 if __name__ == "__main__":
