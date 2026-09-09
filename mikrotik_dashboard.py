@@ -406,20 +406,34 @@ class MikroTikAPI:
             return []
 
 
-    def _get_um_resource(self, path):
-        """Helper to get UM resource, falling back from v6 to v7 path"""
+    def _get_um_data(self, path):
+        """Helper to fetch data from UM, falling back from v6 to v7 path"""
         try:
-            return self.api.get_resource(f'/tool/user-manager/{path}')
+            res = self.api.get_resource(f'/tool/user-manager/{path}')
+            return res.get(), res
         except Exception:
-            return self.api.get_resource(f'/user-manager/{path}')
+            try:
+                res = self.api.get_resource(f'/user-manager/{path}')
+                return res.get(), res
+            except Exception as e:
+                raise e
 
     def generate_vouchers(self, count=1, length=6, prefix="", profile=None):
         """Generate random vouchers in UserManager"""
         import random
         import string
         try:
-            user_resource = self._get_um_resource('user')
-            up_resource = self._get_um_resource('user-profile')
+            # We just need the resource object to call add()
+            # We can figure out the right path by doing a get() on a harmless list like 'user'
+            try:
+                self.api.get_resource('/tool/user-manager/user').get()
+                prefix_path = '/tool/user-manager'
+            except Exception:
+                prefix_path = '/user-manager'
+                
+            user_resource = self.api.get_resource(f'{prefix_path}/user')
+            up_resource = self.api.get_resource(f'{prefix_path}/user-profile')
+
             vouchers = []
             for _ in range(count):
                 chars = string.ascii_lowercase + string.digits
@@ -449,8 +463,7 @@ class MikroTikAPI:
     def get_usermanager_users(self):
         """Get UserManager users and vouchers"""
         try:
-            users = self._get_um_resource('user')
-            all_users = users.get()
+            all_users, _ = self._get_um_data('user')
             return [{
                 'username': u.get('username', 'N/A'),
                 'shared_users': u.get('shared-users', '1'),
@@ -464,8 +477,7 @@ class MikroTikAPI:
     def get_usermanager_sessions(self):
         """Get active UserManager sessions"""
         try:
-            sessions = self._get_um_resource('session')
-            active_sessions = sessions.get()
+            active_sessions, _ = self._get_um_data('session')
             return [{
                 'user': s.get('user', 'N/A'),
                 'calling_station': s.get('calling-station-id', 'N/A'),
@@ -479,8 +491,7 @@ class MikroTikAPI:
     def get_usermanager_profiles(self):
         """Get UserManager profiles"""
         try:
-            profiles = self._get_um_resource('profile')
-            all_profiles = profiles.get()
+            all_profiles, _ = self._get_um_data('profile')
             return [{
                 'name': p.get('name', 'N/A'),
                 'price': p.get('price', '0'),
@@ -492,8 +503,7 @@ class MikroTikAPI:
     def get_usermanager_user_profiles(self):
         """Get UserManager user profiles"""
         try:
-            u_profiles = self._get_um_resource('user-profile')
-            all_u_profiles = u_profiles.get()
+            all_u_profiles, _ = self._get_um_data('user-profile')
             return [{
                 'user': p.get('user', 'N/A'),
                 'profile': p.get('profile', 'N/A'),
