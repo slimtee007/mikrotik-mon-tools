@@ -225,11 +225,22 @@ class MikroTikAPI:
         """Get CPU, RAM, and uptime info"""
         try:
             res = self.api.get_resource('/system/resource')
-            data = res.get()[0]
+            data = res.get()
+            if not data:
+                return None
+            data = data[0]
+            
+            # Use safe int parsing for fields that might be missing or strings
+            def safe_int(val):
+                try:
+                    return int(val)
+                except (ValueError, TypeError):
+                    return 0
+                    
             return {
-                'cpu_load': int(data.get('cpu-load', 0)),
-                'free_memory': int(data.get('free-memory', 0)),
-                'total_memory': int(data.get('total-memory', 0)),
+                'cpu_load': safe_int(data.get('cpu-load', 0)),
+                'free_memory': safe_int(data.get('free-memory', 0)),
+                'total_memory': safe_int(data.get('total-memory', 0)),
                 'uptime': data.get('uptime', 'N/A'),
                 'version': data.get('version', 'N/A'),
                 'board_name': data.get('board-name', 'N/A'),
@@ -832,7 +843,7 @@ def main():
         # Cache logs for 10s to reduce router load
         logs = fetch_with_cache("api_logs", api.get_logs, ttl=10)
 
-    if resources:
+    if resources and resources.get('total_memory', 0) > 0:
         ram_used = ((resources['total_memory'] - resources['free_memory']) / resources['total_memory']) * 100
         store.add_metric(
             datetime.now(),
@@ -843,6 +854,8 @@ def main():
             power['power'] if power else 0,
             len(hotspot_users) if hotspot_users else 0
         )
+    else:
+        ram_used = 0
 
     # ==================== TOP METRICS ROW ====================
     col1, col2, col3, col4, col5 = st.columns(5)
