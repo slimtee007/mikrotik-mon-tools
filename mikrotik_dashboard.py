@@ -1070,6 +1070,19 @@ def main():
     with tab1:
         if hotspot_users:
             df = pd.DataFrame(hotspot_users)
+            df = df.rename(columns={
+                'user': 'Username',
+                'address': 'IP Address',
+                'mac': 'MAC Address',
+                'uptime': 'Uptime',
+                'bytes_in': 'Download',
+                'bytes_out': 'Upload'
+            })
+            
+            search_hotspot = st.text_input("🔍 Search Active Hotspot Users", placeholder="Type a username...")
+            if search_hotspot:
+                df = df[df['Username'].str.contains(search_hotspot, case=False, na=False)]
+                
             st.dataframe(df, use_container_width=True, hide_index=True)
             st.markdown(f"""
             <div style="display: flex; gap: 20px; margin-top: 10px;">
@@ -1122,8 +1135,20 @@ def main():
         if um_users:
             df = pd.DataFrame(um_users)
             df['Status'] = df['disabled'].apply(lambda x: '🔴 Disabled' if x else '🟢 Active')
-            st.dataframe(df[['username', 'shared_users', 'uptime_used', 'bytes_used', 'Status']], 
-                        use_container_width=True, hide_index=True)
+            
+            search_um = st.text_input("🔍 Search User Manager Users", placeholder="Type a username...")
+            if search_um:
+                df = df[df['username'].str.contains(search_um, case=False, na=False)]
+                
+            display_df = df[['username', 'shared_users', 'uptime_used', 'bytes_used', 'Status']].rename(
+                columns={
+                    'username': 'Username',
+                    'shared_users': 'Shared Users',
+                    'uptime_used': 'Uptime Used',
+                    'bytes_used': 'Data Used'
+                }
+            )
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
 
             active_um = len([u for u in um_users if not u['disabled']])
             col1, col2 = st.columns(2)
@@ -1138,6 +1163,18 @@ def main():
     with tab3:
         if um_sessions:
             df = pd.DataFrame(um_sessions)
+            df = df.rename(columns={
+                'user': 'Username',
+                'calling_station': 'MAC Address',
+                'uptime': 'Session Uptime',
+                'bytes_in': 'Download',
+                'bytes_out': 'Upload'
+            })
+            
+            search_sessions = st.text_input("🔍 Search Active Sessions", placeholder="Type a username or MAC...")
+            if search_sessions:
+                df = df[df.apply(lambda row: df.astype(str).apply(lambda x: search_sessions.lower() in x.lower(), axis=1)).any(axis=1)]
+                
             st.dataframe(df, use_container_width=True, hide_index=True)
         else:
             st.info("No active UserManager sessions")
@@ -1146,6 +1183,7 @@ def main():
         st.markdown("### 📋 Available Profiles")
         if um_profiles:
             df_profiles = pd.DataFrame(um_profiles)
+            df_profiles = df_profiles.rename(columns={'name': 'Profile Name', 'price': 'Price', 'validity': 'Validity'})
             st.dataframe(df_profiles, use_container_width=True, hide_index=True)
         else:
             st.info("No profiles found")
@@ -1154,6 +1192,12 @@ def main():
         st.markdown("### 👤 User Profiles Allocation")
         if um_user_profiles:
             df_up = pd.DataFrame(um_user_profiles)
+            df_up = df_up.rename(columns={'user': 'Username', 'profile': 'Assigned Profile'})
+            
+            search_up = st.text_input("🔍 Search Assigned Profiles", placeholder="Type a username...")
+            if search_up:
+                df_up = df_up[df_up['Username'].str.contains(search_up, case=False, na=False)]
+                
             st.dataframe(df_up, use_container_width=True, hide_index=True)
         else:
             st.info("No user-profiles found")
