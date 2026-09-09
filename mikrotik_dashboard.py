@@ -51,41 +51,41 @@ def apply_dark_theme():
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
     :root {
-        --bg-primary: #0a0e1a;
-        --bg-secondary: #111827;
-        --bg-card: #1a1f2e;
-        --bg-card-hover: #232838;
-        --accent-cyan: #00d4ff;
-        --accent-green: #00e676;
-        --accent-orange: #ff9100;
-        --accent-red: #ff5252;
-        --accent-purple: #b967ff;
-        --text-primary: #e2e8f0;
-        --text-secondary: #94a3b8;
-        --border-color: #2d3748;
+        --bg-primary: #061121;
+        --bg-secondary: #0a192f;
+        --bg-card: #112240;
+        --bg-card-hover: #1e3a5f;
+        --accent-cyan: #64ffda;
+        --accent-green: #48bb78;
+        --accent-orange: #ed8936;
+        --accent-red: #e53e3e;
+        --accent-purple: #9f7aea;
+        --text-primary: #ccd6f6;
+        --text-secondary: #8892b0;
+        --border-color: #233554;
     }
 
     .stApp {
-        background: linear-gradient(135deg, #0a0e1a 0%, #111827 50%, #0f172a 100%);
+        background: linear-gradient(135deg, #020c1b 0%, #0a192f 50%, #061121 100%);
         font-family: 'Inter', sans-serif;
     }
 
     /* Glassmorphism cards */
     .metric-card {
-        background: rgba(26, 31, 46, 0.7);
+        background: rgba(17, 34, 64, 0.75);
         backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(100, 255, 218, 0.15);
         border-radius: 16px;
         padding: 20px;
         margin: 10px 0;
         transition: all 0.3s ease;
-        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+        box-shadow: 0 4px 24px rgba(2, 12, 27, 0.5);
     }
 
     .metric-card:hover {
         transform: translateY(-2px);
-        border-color: rgba(0, 212, 255, 0.3);
-        box-shadow: 0 8px 32px rgba(0, 212, 255, 0.1);
+        border-color: rgba(100, 255, 218, 0.4);
+        box-shadow: 0 8px 32px rgba(100, 255, 218, 0.15);
     }
 
     .metric-title {
@@ -178,7 +178,7 @@ def apply_dark_theme():
 
     /* Buttons */
     .stButton>button {
-        background: linear-gradient(135deg, #00d4ff, #0099cc);
+        background: linear-gradient(135deg, #64ffda, #0099cc);
         color: white;
         border: none;
         border-radius: 8px;
@@ -221,10 +221,10 @@ def apply_dark_theme():
         margin: 2px 0;
     }
 
-    .log-info { background: rgba(0, 212, 255, 0.1); color: #00d4ff; }
-    .log-warning { background: rgba(255, 145, 0, 0.1); color: #ff9100; }
+    .log-info { background: rgba(0, 212, 255, 0.1); color: #64ffda; }
+    .log-warning { background: rgba(255, 145, 0, 0.1); color: #ed8936; }
     .log-error { background: rgba(255, 82, 82, 0.1); color: #ff5252; }
-    .log-success { background: rgba(0, 230, 118, 0.1); color: #00e676; }
+    .log-success { background: rgba(0, 230, 118, 0.1); color: #48bb78; }
 
     /* Animations */
     @keyframes fadeIn {
@@ -579,9 +579,9 @@ def create_time_series(timestamps, data_dict, title, colors):
             y=list(data),
             mode='lines',
             name=label,
-            line=dict(color=colors.get(label, '#00d4ff'), width=2),
+            line=dict(color=colors.get(label, '#64ffda'), width=2),
             fill='tozeroy',
-            fillcolor=f"rgba{tuple(list(int(colors.get(label, '#00d4ff')[i:i+2], 16) for i in (1, 3, 5)) + [0.1])}"
+            fillcolor=f"rgba{tuple(list(int(colors.get(label, '#64ffda')[i:i+2], 16) for i in (1, 3, 5)) + [0.1])}"
         ))
     fig.update_layout(
         title={'text': title, 'font': {'color': '#e2e8f0', 'size': 16}},
@@ -603,8 +603,8 @@ def create_network_usage_chart(interfaces):
     tx_vals = [i['tx_raw'] / (1024**3) for i in interfaces]
 
     fig = go.Figure(data=[
-        go.Bar(name='RX (Download)', x=names, y=rx_vals, marker_color='#00d4ff'),
-        go.Bar(name='TX (Upload)', x=names, y=tx_vals, marker_color='#b967ff')
+        go.Bar(name='RX (Download)', x=names, y=rx_vals, marker_color='#64ffda'),
+        go.Bar(name='TX (Upload)', x=names, y=tx_vals, marker_color='#9f7aea')
     ])
     fig.update_layout(
         barmode='group',
@@ -626,7 +626,7 @@ def create_user_pie_chart(active_count, total_count):
         labels=['Active', 'Inactive'],
         values=[active_count, max(0, total_count - active_count)],
         hole=0.6,
-        marker_colors=['#00e676', '#2d3748'],
+        marker_colors=['#48bb78', '#2d3748'],
         textinfo='none'
     )])
     fig.update_layout(
@@ -676,7 +676,7 @@ def main():
     with st.sidebar:
         st.markdown("""
         <div style="text-align: center; padding: 20px 0;">
-            <h1 style="color: #00d4ff; font-size: 1.5rem; margin: 0;">📡 MikroTik</h1>
+            <h1 style="color: #64ffda; font-size: 1.5rem; margin: 0;">📡 MikroTik</h1>
             <p style="color: #94a3b8; font-size: 0.8rem; margin: 5px 0 0 0;">Hotspot & Billing Monitor</p>
         </div>
         """, unsafe_allow_html=True)
@@ -715,14 +715,14 @@ def main():
             st.markdown("""
             <div style="display: flex; align-items: center; gap: 8px; padding: 10px; background: rgba(255, 145, 0, 0.1); border-radius: 8px;">
                 <span class="status-offline"></span>
-                <span style="color: #ff9100; font-size: 0.9rem;">Demo Mode</span>
+                <span style="color: #ed8936; font-size: 0.9rem;">Demo Mode</span>
             </div>
             """, unsafe_allow_html=True)
         else:
             st.markdown("""
             <div style="display: flex; align-items: center; gap: 8px; padding: 10px; background: rgba(0, 230, 118, 0.1); border-radius: 8px;">
                 <span class="status-online"></span>
-                <span style="color: #00e676; font-size: 0.9rem;">Connected</span>
+                <span style="color: #48bb78; font-size: 0.9rem;">Connected</span>
             </div>
             """, unsafe_allow_html=True)
 
@@ -752,7 +752,7 @@ def main():
         </div>
         <div style="text-align: right;">
             <p style="color: #64748b; margin: 0; font-size: 0.8rem;">Last Update</p>
-            <p style="color: #00d4ff; margin: 0; font-size: 1rem; font-weight: 600;">{}</p>
+            <p style="color: #64ffda; margin: 0; font-size: 1rem; font-weight: 600;">{}</p>
         </div>
     </div>
     """.format(store.last_update.strftime("%H:%M:%S") if store.last_update else "--:--:--"), unsafe_allow_html=True)
@@ -761,22 +761,33 @@ def main():
     api = st.session_state.api
     demo = st.session_state.demo_mode
 
+    now = time.time()
+    if 'data_cache' not in st.session_state:
+        st.session_state.data_cache = {}
+
+    def fetch_with_cache(key, fetch_func, ttl=10):
+        if key not in st.session_state.data_cache or (now - st.session_state.data_cache[key]['time']) > ttl:
+            st.session_state.data_cache[key] = {'data': fetch_func(), 'time': now}
+        return st.session_state.data_cache[key]['data']
+
     if demo or api is None:
         resources = DemoData.get_system_resources()
         power = DemoData.get_power_usage()
         interfaces = DemoData.get_interface_stats()
         hotspot_users = DemoData.get_active_hotspot_users()
-        um_users = DemoData.get_usermanager_users()
+        um_users = fetch_with_cache("demo_um_users", DemoData.get_usermanager_users, ttl=30)
         um_sessions = DemoData.get_usermanager_sessions()
-        logs = DemoData.get_logs()
+        logs = fetch_with_cache("demo_logs", DemoData.get_logs, ttl=10)
     else:
         resources = api.get_system_resources()
         power = api.get_power_usage()
         interfaces = api.get_interface_stats()
         hotspot_users = api.get_active_hotspot_users()
-        um_users = api.get_usermanager_users()
+        # Cache UserManager users for 30s as this list can be huge and slow to fetch
+        um_users = fetch_with_cache("api_um_users", api.get_usermanager_users, ttl=30)
         um_sessions = api.get_usermanager_sessions()
-        logs = api.get_logs()
+        # Cache logs for 10s to reduce router load
+        logs = fetch_with_cache("api_logs", api.get_logs, ttl=10)
 
     if resources:
         ram_used = ((resources['total_memory'] - resources['free_memory']) / resources['total_memory']) * 100
@@ -798,7 +809,7 @@ def main():
             "CPU Load",
             f"{resources['cpu_load']}%" if resources else "N/A",
             f"Architecture: {resources.get('architecture', 'N/A')}" if resources else "",
-            "#00d4ff",
+            "#64ffda",
             "🖥️"
         )
 
@@ -808,7 +819,7 @@ def main():
             "RAM Usage",
             f"{ram_pct}%" if resources else "N/A",
             f"Free: {MikroTikAPI._format_bytes(resources['free_memory']) if resources else 'N/A'}",
-            "#b967ff",
+            "#9f7aea",
             "💾"
         )
 
@@ -820,14 +831,14 @@ def main():
             "Power Draw",
             f"{power_val:.1f}W" if power else "N/A",
             f"{voltage_val:.1f}V @ {current_val:.2f}A" if power else "",
-            "#00e676",
+            "#48bb78",
             "⚡"
         )
 
     with col4:
         temp = power.get('temperature') if power else None
         temp_display = f"{temp:.1f}°C" if isinstance(temp, (int, float)) else "N/A"
-        temp_color = "#ff9100" if isinstance(temp, (int, float)) and temp > 60 else "#00e676"
+        temp_color = "#ed8936" if isinstance(temp, (int, float)) and temp > 60 else "#48bb78"
         render_metric_card(
             "Temperature",
             temp_display,
@@ -853,18 +864,18 @@ def main():
 
     with col1:
         if resources:
-            fig = create_gauge_chart(resources['cpu_load'], "CPU", "#00d4ff")
+            fig = create_gauge_chart(resources['cpu_load'], "CPU", "#64ffda")
             st.plotly_chart(fig, use_container_width=True, key="cpu_gauge")
 
     with col2:
         if resources:
-            fig = create_gauge_chart(ram_pct, "RAM", "#b967ff")
+            fig = create_gauge_chart(ram_pct, "RAM", "#9f7aea")
             st.plotly_chart(fig, use_container_width=True, key="ram_gauge")
 
     with col3:
         if power and isinstance(power.get('temperature'), (int, float)):
             temp_val = min(power['temperature'], 100)
-            fig = create_gauge_chart(temp_val, "Temp", "#ff9100", "°C")
+            fig = create_gauge_chart(temp_val, "Temp", "#ed8936", "°C")
             st.plotly_chart(fig, use_container_width=True, key="temp_gauge")
         else:
             fig = create_gauge_chart(0, "Temp", "#64748b", "°C")
@@ -879,7 +890,7 @@ def main():
                 store.timestamps,
                 {"CPU": store.cpu_history, "RAM": store.ram_history},
                 "CPU & RAM History",
-                {"CPU": "#00d4ff", "RAM": "#b967ff"}
+                {"CPU": "#64ffda", "RAM": "#9f7aea"}
             )
             st.plotly_chart(fig, use_container_width=True, key="sys_history")
 
@@ -889,7 +900,7 @@ def main():
                 store.timestamps,
                 {"Active Users": store.active_users_history},
                 "Active Hotspot Users",
-                {"Active Users": "#00e676"}
+                {"Active Users": "#48bb78"}
             )
             st.plotly_chart(fig, use_container_width=True, key="users_history")
 
@@ -934,7 +945,7 @@ def main():
             <div style="display: flex; gap: 20px; margin-top: 10px;">
                 <div class="metric-card" style="flex: 1;">
                     <div class="metric-title">Total Active</div>
-                    <div class="metric-value" style="color: #00e676;">{len(hotspot_users)}</div>
+                    <div class="metric-value" style="color: #48bb78;">{len(hotspot_users)}</div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -954,7 +965,7 @@ def main():
                 fig = create_user_pie_chart(active_um, len(um_users))
                 st.plotly_chart(fig, use_container_width=True, key="um_pie")
             with col2:
-                render_metric_card("Total Vouchers", len(um_users), f"{active_um} active", "#b967ff", "🎫")
+                render_metric_card("Total Vouchers", len(um_users), f"{active_um} active", "#9f7aea", "🎫")
         else:
             st.info("No UserManager users found")
 
@@ -996,7 +1007,7 @@ def main():
 
     # ==================== AUTO REFRESH ====================
     if auto_refresh:
-        time.sleep(0.5)
+        time.sleep(st.session_state.config['refresh_interval'])
         st.rerun()
 
 
