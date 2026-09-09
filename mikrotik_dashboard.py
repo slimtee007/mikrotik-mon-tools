@@ -1063,11 +1063,18 @@ def main():
             df = pd.DataFrame(um_users)
             df['Status'] = df['disabled'].apply(lambda x: '🔴 Disabled' if x else '🟢 Active')
             
+            # Map Profiles if they exist
+            if um_user_profiles:
+                up_dict = {p['user']: p['profile'] for p in um_user_profiles}
+                df['Profile'] = df['username'].map(up_dict).fillna('None')
+            else:
+                df['Profile'] = 'None'
+            
             search_um = st.text_input("Search User Manager Users", placeholder="Type a username...")
             if search_um:
                 df = df[df['username'].str.contains(search_um, case=False, na=False)]
                 
-            display_df = df[['username', 'shared_users', 'uptime_used', 'bytes_used', 'Status']].rename(
+            display_df = df[['username', 'Profile', 'shared_users', 'uptime_used', 'bytes_used', 'Status']].rename(
                 columns={
                     'username': 'Username',
                     'shared_users': 'Shared Users',
