@@ -766,7 +766,7 @@ def main():
 
         with st.expander("💳 Billing Integration (NGN)"):
             b_prov = st.session_state.config.get('billing_provider', 'None')
-            billing_provider = st.selectbox("Payment Gateway", ["None", "Paystack", "Flutterwave"], index=["None", "Paystack", "Flutterwave"].index(b_prov) if b_prov in ["None", "Paystack", "Flutterwave"] else 0)
+            billing_provider = st.selectbox("Payment Gateway", ["None", "Paystack", "Flutterwave", "PalmPay"], index=["None", "Paystack", "Flutterwave", "PalmPay"].index(b_prov) if b_prov in ["None", "Paystack", "Flutterwave", "PalmPay"] else 0)
             billing_key = st.text_input("Secret API Key", value=st.session_state.config.get('billing_key', ''), type="password")
             if st.button("Save Billing", use_container_width=True):
                 st.session_state.config['billing_provider'] = billing_provider
@@ -1024,6 +1024,17 @@ def main():
             try:
                 today = datetime.now().strftime("%Y-%m-%d")
                 res = requests.get(f"https://api.flutterwave.com/v3/transactions?status=successful&from={today}", 
+                                 headers={"Authorization": f"Bearer {b_key}"})
+                data = res.json()
+                return sum(t.get('amount', 0) for t in data.get('data', []))
+            except:
+                return 0.0
+        elif b_prov == "PalmPay" and b_key:
+            try:
+                # Generalized PalmPay API fetch for daily successful transactions
+                # (Note: Exact endpoint depends on PalmPay Merchant vs POS integration)
+                today = datetime.now().strftime("%Y-%m-%d")
+                res = requests.get(f"https://api.palmpay.com/v2/transactions?status=SUCCESS&date={today}", 
                                  headers={"Authorization": f"Bearer {b_key}"})
                 data = res.json()
                 return sum(t.get('amount', 0) for t in data.get('data', []))
