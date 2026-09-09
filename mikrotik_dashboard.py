@@ -405,6 +405,35 @@ class MikroTikAPI:
         except Exception:
             return []
 
+
+    def generate_vouchers(self, count=1, length=6, prefix=""):
+        """Generate random vouchers in UserManager"""
+        import random
+        import string
+        try:
+            # Try RouterOS v6 path first, then v7
+            try:
+                user_resource = self.api.get_resource('/tool/user-manager/user')
+            except Exception:
+                user_resource = self.api.get_resource('/user-manager/user')
+
+            vouchers = []
+            for _ in range(count):
+                chars = string.ascii_lowercase + string.digits
+                username = prefix + ''.join(random.choice(chars) for _ in range(length))
+                password = ''.join(random.choice(chars) for _ in range(length))
+                
+                try:
+                    user_resource.add(customer="admin", username=username, password=password)
+                except Exception:
+                    # In RouterOS v7 or different config, customer might not be needed
+                    user_resource.add(username=username, password=password)
+                
+                vouchers.append({'username': username, 'password': password})
+            return vouchers
+        except Exception as e:
+            return str(e)
+
     def get_usermanager_users(self):
         """Get UserManager users and vouchers"""
         try:
@@ -464,6 +493,13 @@ class MikroTikAPI:
 class DemoData:
     """Generate realistic demo data when MikroTik is not connected"""
 
+    _demo_um_users = [
+        {'username': 'admin', 'shared_users': '1', 'uptime_used': '12h30m', 'bytes_used': '5.2 GB', 'disabled': False},
+        {'username': 'voucher_1day', 'shared_users': '3', 'uptime_used': '4h15m', 'bytes_used': '1.8 GB', 'disabled': False},
+        {'username': 'voucher_1week', 'shared_users': '5', 'uptime_used': '2d6h', 'bytes_used': '12.5 GB', 'disabled': False},
+        {'username': 'guest_temp', 'shared_users': '1', 'uptime_used': '30m', 'bytes_used': '150 MB', 'disabled': True},
+    ]
+
     @staticmethod
     def get_system_resources():
         import random
@@ -509,14 +545,27 @@ class DemoData:
             {'user': 'voucher_abc123', 'address': '192.168.88.247', 'mac': '11:22:33:77:88:99', 'uptime': '15m', 'bytes_in': '85 MB', 'bytes_out': '30 MB'},
         ]
 
-    @staticmethod
-    def get_usermanager_users():
-        return [
-            {'username': 'admin', 'shared_users': '1', 'uptime_used': '12h30m', 'bytes_used': '5.2 GB', 'disabled': False},
-            {'username': 'voucher_1day', 'shared_users': '3', 'uptime_used': '4h15m', 'bytes_used': '1.8 GB', 'disabled': False},
-            {'username': 'voucher_1week', 'shared_users': '5', 'uptime_used': '2d6h', 'bytes_used': '12.5 GB', 'disabled': False},
-            {'username': 'guest_temp', 'shared_users': '1', 'uptime_used': '30m', 'bytes_used': '150 MB', 'disabled': True},
-        ]
+
+    @classmethod
+    def generate_vouchers(cls, count=1, length=6, prefix=""):
+        import random
+        import string
+        import time
+        vouchers = []
+        for _ in range(count):
+            chars = string.ascii_lowercase + string.digits
+            username = prefix + ''.join(random.choice(chars) for _ in range(length))
+            password = ''.join(random.choice(chars) for _ in range(length))
+            vouchers.append({'username': username, 'password': password})
+            cls._demo_um_users.append({
+                'username': username, 'shared_users': '1', 'uptime_used': '0s', 'bytes_used': '0 B', 'disabled': False
+            })
+        time.sleep(0.5)
+        return vouchers
+
+    @classmethod
+    def get_usermanager_users(cls):
+        return cls._demo_um_users
 
     @staticmethod
     def get_usermanager_sessions():
@@ -953,6 +1002,39 @@ def main():
             st.info("No active hotspot users")
 
     with tab2:
+        st.markdown("### 🎫 Voucher Generator")
+        with st.form("voucher_generator"):
+            col_gen1, col_gen2, col_gen3 = st.columns(3)
+            with col_gen1:
+                voucher_count = st.number_input("Number of Vouchers", min_value=1, max_value=500, value=5)
+            with col_gen2:
+                voucher_prefix = st.text_input("Prefix (Optional)", value="")
+            with col_gen3:
+                voucher_length = st.number_input("Random Length", min_value=4, max_value=16, value=6)
+            
+            generate_btn = st.form_submit_button("Generate Vouchers", use_container_width=True)
+            
+        if generate_btn:
+            with st.spinner("Generating..."):
+                if demo or api is None:
+                    new_vouchers = DemoData.generate_vouchers(voucher_count, voucher_length, voucher_prefix)
+                else:
+                    new_vouchers = api.generate_vouchers(voucher_count, voucher_length, voucher_prefix)
+                
+                if isinstance(new_vouchers, str):
+                    st.error(f"Error: {new_vouchers}")
+                elif new_vouchers:
+                    st.success(f"Successfully generated {len(new_vouchers)} vouchers!")
+                    with st.expander("View Generated Credentials", expanded=True):
+                        st.dataframe(pd.DataFrame(new_vouchers), use_container_width=True)
+                    
+                    if 'data_cache' in st.session_state:
+                        st.session_state.data_cache.pop('api_um_users', None)
+                        st.session_state.data_cache.pop('demo_um_users', None)
+
+        st.markdown("---")
+        st.markdown("### 👥 Existing Users")
+        
         if um_users:
             df = pd.DataFrame(um_users)
             df['Status'] = df['disabled'].apply(lambda x: '🔴 Disabled' if x else '🟢 Active')
