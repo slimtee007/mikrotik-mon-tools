@@ -913,19 +913,21 @@ def main():
             "⏱️"
         )
 
+
     # ==================== CHARTS ROW 1 ====================
     st.markdown('<div class="section-header">System Performance</div>', unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns([1, 1, 1])
 
     with col1:
-        if resources:
-            fig = create_gauge_chart(resources['cpu_load'], "CPU", "#2f81f7")
+        if resources is not None:
+            fig = create_gauge_chart(resources.get('cpu_load', 0), "CPU", "#2f81f7")
             st.plotly_chart(fig, use_container_width=True, key="cpu_gauge")
 
     with col2:
-        if resources:
-            fig = create_gauge_chart(ram_pct, "RAM", "#8957e5")
+        if resources is not None:
+            # We already have ram_used calculated safely above
+            fig = create_gauge_chart(ram_used, "RAM", "#8957e5")
             st.plotly_chart(fig, use_container_width=True, key="ram_gauge")
 
     with col3:
@@ -936,7 +938,6 @@ def main():
         else:
             fig = create_gauge_chart(0, "Temp", "#64748b", "°C")
             st.plotly_chart(fig, use_container_width=True, key="temp_gauge_na")
-
     # ==================== CHARTS ROW 2 ====================
     col1, col2 = st.columns(2)
 
